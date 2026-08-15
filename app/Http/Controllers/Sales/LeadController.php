@@ -4,12 +4,14 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Sales;
 
+use App\Domain\Crm\PipelineService;
 use App\Domain\Numbering\DocumentNumberService;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\Lead;
 use App\Models\LeadActivity;
 use App\Models\PipelineStage;
+use App\Models\SalesActivity;
 use App\Models\User;
 use App\Services\Audit\AuditRecorder;
 use App\Support\CompanyContext;
@@ -104,6 +106,23 @@ class LeadController extends Controller
                     'summary' => $activity->summary,
                     'actor' => $activity->actor->name ?? 'System',
                     'at' => $activity->created_at?->toDayDateTimeString(),
+                ])->all(),
+            'stages' => PipelineStage::query()->orderBy('sort')->get()
+                ->map(fn (PipelineStage $s): array => ['value' => $s->getKey(), 'label' => $s->name])->all(),
+            'contactTypes' => array_map(
+                static fn (string $type): array => ['value' => $type, 'label' => ucfirst($type)],
+                PipelineService::CONTACT_TYPES
+            ),
+            'followUps' => SalesActivity::query()
+                ->where('lead_id', $lead->getKey())
+                ->whereNotNull('follow_up_at')
+                ->orderBy('follow_up_at')
+                ->get()
+                ->map(fn (SalesActivity $activity): array => [
+                    'id' => $activity->getKey(),
+                    'summary' => $activity->summary,
+                    'follow_up_at' => $activity->follow_up_at?->toDayDateTimeString(),
+                    'overdue' => $activity->follow_up_at?->isPast() ?? false,
                 ])->all(),
             'permissions' => [
                 'update' => $request->user()->can('update', $lead),

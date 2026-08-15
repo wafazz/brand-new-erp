@@ -8,9 +8,14 @@ use App\Contracts\Scopeable;
 use App\Models\Concerns\AppliesDataScope;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property ?CarbonImmutable $occurred_at
+ * @property ?CarbonImmutable $follow_up_at
+ */
 class SalesActivity extends Model implements Scopeable
 {
     use AppliesDataScope;
@@ -48,5 +53,11 @@ class SalesActivity extends Model implements Scopeable
     public static function branchColumn(): ?string
     {
         return null;
+    }
+
+    /** @return BelongsTo<Lead, $this> */
+    public function lead(): BelongsTo
+    {
+        return $this->belongsTo(Lead::class);
     }
 }

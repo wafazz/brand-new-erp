@@ -8,6 +8,7 @@ use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Catalogue\ProductController;
+use App\Http\Controllers\Crm\PipelineController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Finance\CommissionController;
 use App\Http\Controllers\Finance\CommissionPlanController;
@@ -141,6 +142,13 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
     Route::get('/leads/{lead}/edit', [LeadController::class, 'edit'])->name('leads.edit');
     Route::put('/leads/{lead}', [LeadController::class, 'update'])->name('leads.update');
+    Route::post('/leads/{lead}/contacts', [PipelineController::class, 'logContact'])->name('leads.contacts.store');
+    Route::post('/leads/{lead}/stage', [PipelineController::class, 'moveStage'])->name('leads.stage.update');
+
+    Route::get('/pipeline', [PipelineController::class, 'board'])->name('pipeline.index');
+    Route::get('/pipeline/stages', [PipelineController::class, 'stages'])->name('pipeline.stages');
+    Route::post('/pipeline/stages', [PipelineController::class, 'storeStage'])->name('pipeline.stages.store');
+    Route::put('/pipeline/stages/{stage}', [PipelineController::class, 'updateStage'])->name('pipeline.stages.update');
 
     Route::get('/suppliers', [SupplierController::class, 'index'])->name('suppliers.index');
     Route::get('/suppliers/create', [SupplierController::class, 'create'])->name('suppliers.create');

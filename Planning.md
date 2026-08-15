@@ -1494,7 +1494,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes                                                                                                                                                         | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
 | **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, exports                                                                                                                                                                                     | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
 | **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
-| **P10 ~** | Optional modules       | HR, Payroll, **POS ✔**, CRM, Projects, Assets, Tickets, Subscriptions                                                                                                                                                                  | Per module. POS closed — see Appendix V                                                                                                                                                       |
+| **P10 ~** | Optional modules       | HR, Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, Subscriptions                                                                                                                                                            | Per module. POS — Appendices V–AA. CRM — Appendix AB                                                                                                                                          |
 
 **Hard scope gate:** no work past P4 until one real SME is using P0–P4. Adopted from SMEOS's
 Sage veto, which is the most valuable governance rule in that document.
@@ -3564,3 +3564,78 @@ rather than a bypass, and imposing one without being asked would be inventing a 
 wave, from memory of the code just written, and are not tested. AA-1 was plausible, adjacent to a
 real hole I had just closed, and wrong. An item on that list is a claim, and claims in this project
 are supposed to be checked before they are acted on.
+
+
+---
+
+## Appendix AB — CRM: the pipeline, and a panel that had never had anything in it (2026-08-15)
+
+Second P10 module, chosen because CRM had the most domain already built and one live defect sitting
+inside it.
+
+### The defect: a screen reading a table nothing wrote
+
+`Lead/Show.tsx` has displayed an **Activity** panel since Appendix O, with the empty state *"Calls,
+messages and meetings appear here once recorded."* Nothing in the system ever recorded one.
+`LeadActivity` was read in one place and written in none.
+
+`PipelineStage` had the same shape from the other direction: the lead form offered a stage dropdown
+and there was no way to create a stage, so on a fresh install it was permanently empty.
+
+Both are the pattern this project keeps meeting — **a surface that promises something the domain
+never delivers.** Third instance after `quantity_returned` (Appendix X) and the `upline` recipient
+(Appendix S).
+
+### Two activity tables, one job each
+
+The schema carries `lead_activities` and `sales_activities`, overlapping enough to be confusing. They
+now have distinct jobs:
+
+| | |
+|---|---|
+| `lead_activities` | **the lead's timeline** — what happened, including system-written `status_changed` entries |
+| `sales_activities` | **the salesperson's diary** — carries `follow_up_at`, and can hang off a customer as well as a lead |
+
+Logging a contact writes both: the timeline entry because that is what the lead screen shows, and the
+diary entry because that is what the follow-up list reads. One user action, two records with
+different lifetimes — stated here rather than left for someone to discover.
+
+### What was built
+
+| Screen | |
+|---|---|
+| **Pipeline board** | leads by stage, with each column's value and its **weighted** value — the total multiplied by that stage's probability |
+| **Follow up now** | everything due or overdue, on the board and on the lead |
+| **Log a contact** | call, WhatsApp, email, meeting, visit or note, with an optional follow-up date |
+| **Move stage** | with a note, recorded on the timeline |
+| **Stages** | create and edit stages, their odds, order, and whether reaching one means won or lost |
+
+A new `leads.configure` permission separates *working* the pipeline from *shaping* it. Adding it
+revealed that `leads.*` gave marketers the ability to restructure the sales pipeline — narrowed to
+explicit abilities for both marketing roles.
+
+Moving a lead into a winning or losing stage sets its status to match, so **the board and the lead
+list cannot disagree**. A converted lead is refused any further movement, and a won lead drops off
+the follow-up list — nobody should be chased about a deal already closed.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,606 passed / 3,293 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+Eight rules proven by planting, including the two that close the defect: the timeline entry is
+really written, and the board really weights by probability.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AB-1 | **No quotations.** A lead that reaches "quoted" has no document behind it — the stage is a label, not a record |
+| AB-2 | The board is read-only. Moving a lead means opening it; there is **no drag between columns** |
+| AB-3 | Follow-ups have no owner separate from the person who logged them, and no way to mark one done other than logging the next contact |
+| AB-4 | `sales_activities` can hang off a customer, but **only leads have a screen that writes one**. Contact with an existing customer is still unrecordable |
+| AB-5 | No territories, sales teams or targets screens, though all three exist in the domain and `SalesTarget` already feeds the dashboard |
+| AB-6 | Still true: **no screen has been used by a human** |
