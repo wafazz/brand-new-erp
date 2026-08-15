@@ -12,6 +12,9 @@ use App\Models\Concerns\HasUlid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property ?CompanyRole $role
+ */
 class CompanyUser extends Model implements Scopeable
 {
     use AppliesDataScope;

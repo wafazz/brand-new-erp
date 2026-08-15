@@ -95,6 +95,18 @@
         "margin"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 16:16:05",
+      "entry": "P7 Finance gate CLOSED. Invoice/payment/outstanding reconciles to the cent (3180 = 1260 + 1920, difference asserted as exactly 0.0000) and the four ageing buckets match a fixture with a settled invoice correctly dropping out. The journal is a real double-entry ledger, not a cash book with a ledger-shaped name: balance is enforced by the service, by a CHECK on the entry and by a per-line CHECK, journal_lines reject UPDATE and DELETE at the database so corrections must be reversing entries, and trialBalance() is asserted zero after issue, payment, void and payout. CA-10 is closed - the last of the ten prior-art anti-patterns - with commission posting Dr Expense/Cr Payable on payable and Dr Payable/Cr Bank on payout, clearing the payable account to zero. The payout also flips every commission to paid, which is precisely the AgentStockit double-payment defect (CA-5); both proven by planted violation. P3-2 also closed: invoices now exist and snapshot money at issue. 1212 tests, 103 tables. Q-18 and P4-4 remain open - the ledger is exact but the cost figures flowing into it are still unvalidated.",
+      "tags": [
+        "p7",
+        "erp",
+        "gate-closed",
+        "finance",
+        "ledger"
+      ],
+      "agent": "Iris"
     }
   ]
 }

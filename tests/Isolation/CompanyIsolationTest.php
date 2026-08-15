@@ -27,6 +27,7 @@ use App\Models\CommissionPayout;
 use App\Models\CommissionPayoutItem;
 use App\Models\CommissionPlan;
 use App\Models\CommissionRequest;
+use App\Models\CommissionRollup;
 use App\Models\CommissionRule;
 use App\Models\CommissionRuleVersion;
 use App\Models\CommissionSource;
@@ -73,7 +74,9 @@ use App\Models\PurchaseRequestItem;
 use App\Models\ReferralCode;
 use App\Models\Role;
 use App\Models\RolePermissionScope;
+use App\Models\RollupRun;
 use App\Models\SalesActivity;
+use App\Models\SalesRollup;
 use App\Models\SalesTarget;
 use App\Models\SalesTeam;
 use App\Models\SalesTeamMember;
@@ -344,6 +347,14 @@ function seedRowFor(string $class, Company $company): Model
             DocumentSequence::class => ['key' => 'seq-'.$suffix, 'prefix' => 'SQ'],
             Order::class => ['order_number' => 'SO-'.$suffix, 'customer_name' => 'Walk-in '.$suffix],
             Territory::class => ['code' => 'TR-'.$suffix, 'name' => 'Territory '.$suffix],
+            SalesRollup::class => ['rollup_date' => now()->toDateString(), 'orders_count' => 1, 'revenue' => '100'],
+            CommissionRollup::class => [
+                'period' => '2026-08',
+                'recipient_user_id' => newUser($suffix.'cro')->getKey(),
+                'recipient_role' => 'marketer',
+                'net' => '50',
+            ],
+            RollupRun::class => ['kind' => 'sales', 'scope_key' => now()->toDateString(), 'ran_at' => now()],
             Invoice::class => ['invoice_number' => 'INV-'.$suffix, 'customer_name' => 'Aminah '.$suffix],
             InvoiceItem::class => [
                 'invoice_id' => Invoice::create(['invoice_number' => 'INV2-'.$suffix, 'customer_name' => 'A'])->getKey(),

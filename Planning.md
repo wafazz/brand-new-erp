@@ -1492,7 +1492,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
 | **P6 ✔** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
 | **P7 ✔** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
-| **P8** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
+| **P8 ✔** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
 | **P9** | Hardening & Launch | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy | External security review clean; restore rehearsed and documented |
 | **P10** | Optional modules | HR, Payroll, POS, CRM, Projects, Assets, Tickets, Subscriptions | Per module |
 
@@ -2097,3 +2097,54 @@ The payable account clears to zero, a `cash_flows` row is written against the sa
 | P7-5 | Supplier bill payment does not post to the ledger; only sales and commission do |
 | P7-6 | Bank reconciliation, opening balances and period close are absent |
 | P7-7 | Q-18 / P4-4 remain open. The ledger is exact, but the **cost figures flowing into it are still unvalidated** |
+
+---
+
+## Appendix K — P8 Gate Evidence (closed 2026-08-15)
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **1,261 passed, 1,824 assertions** (Unit 65 · Architecture 10 · Isolation 1,016 · Feature 160 · Concurrency 10) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` / `vite build` | pass |
+| Schema | **106 tables** |
+
+### The two gate criteria
+
+**1. Precomputed matches the live-query oracle — and the comparison is not a tautology.**
+The rollup is built by SQL `GROUP BY`; the oracle recomputes the same figures by **iterating orders in PHP with exact `Money` arithmetic**. The two share no code, so agreement means something. Planting a real aggregation bug — summing `unit_cost` without multiplying by quantity — fails the comparison immediately.
+
+Also proven: rebuilding three times does not double-count, and a cancelled order drops out of the rollup on rebuild (MYR 1,500 → 500).
+
+**2. Every dashboard figure is scope-filtered.** Two salespeople and an owner over the same data:
+
+| Viewer | Revenue seen |
+|---|---|
+| Siti (scope `own`) | MYR 1,000.00 |
+| Rahim (scope `own`) | MYR 500.00 |
+| Owner (scope `company`) | MYR 1,500.00 |
+
+A salesperson with no orders gets `0.0000`, not somebody else's numbers. Removing `visibleTo()` from the dashboard query fails the test. Breakdown tables (`top_salespeople`, `top_campaigns`, team/channel/marketer) run through the same scoped query, so a chart cannot leak what a list would not.
+
+### The UI gap is partly closed
+
+P2–P7 shipped as domain services with no screens. P8 adds the first real working surface: a **role-aware dashboard** with five variants, served by `DashboardController`, which resolves the allowed variants from the user's company role and **falls back rather than honouring a variant the role is not entitled to** — requesting `?view=management` as a salesperson returns the salesperson dashboard, tested.
+
+Components added: `SliceTable`, plus `StatCard`/`DataTable`/`MoneyText` reused from P0.
+
+### A P0 assertion replaced rather than deleted
+
+Two P0 tests asserted the placeholder dashboard props (`branchCount`, `userCount`). The real dashboard sends `figures` instead. One test was updated to the new contract; the other was **proving company isolation through `branchCount`**, so its intent was preserved by asserting branch isolation directly (`1` vs `3`) rather than dropping the coverage.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P8-1 | **Rollups are not scheduled.** `rebuildSales()`/`rebuildCommission()` exist and are tested, but nothing runs them — no scheduler entry, no queued job |
+| P8-2 | **No exports.** §39 item 14 (exports apply the same scope as list screens) remains only partly proven: list and aggregate are covered, there is still no export endpoint |
+| P8-3 | Commission rollups are built and scoped but **no dashboard reads them by period range** — only current-period totals |
+| P8-4 | Dashboards read only sales and commission rollups. Inventory value, cash position and top products from §20 are not implemented |
+| P8-5 | Only the dashboard has a UI. Customers, products, orders, inventory, purchasing, invoices and commission remain service-layer only |
+| P8-6 | No charts — figures are stat tiles and tables. Deliberate for now (D-07 in the original prior art was a chart-library choice; nothing has been chosen here) |

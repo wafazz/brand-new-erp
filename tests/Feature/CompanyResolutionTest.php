@@ -51,8 +51,8 @@ it('renders the dashboard for a member of an active company', function (): void 
         ->assertInertia(fn (AssertableInertia $page) => $page
             ->component('Dashboard')
             ->where('companyName', 'Acme Trading')
-            ->where('branchCount', 1)
-            ->where('userCount', 1)
+            ->has('figures')
+            ->has('availableVariants')
         );
 });
 
@@ -90,14 +90,11 @@ it('rejects a guest before any company is resolved', function (): void {
     expect(app(CompanyContext::class)->hasContext())->toBeFalse();
 });
 
-it('counts only the resolved company\'s branches on the dashboard', function (): void {
-    $this->seed(PermissionSeeder::class);
-    $this->seed(ModuleSeeder::class);
-
+it('counts only the resolved company\'s branches', function (): void {
     $mine = $this->company('Acme Trading');
     $theirs = $this->company('Rival Sdn Bhd');
 
-    $user = member($mine, 'owner', 'mine@example.test');
+    member($mine, 'owner', 'mine@example.test');
     member($theirs, 'owner', 'theirs@example.test');
 
     $this->withCompany($theirs, function (): void {
@@ -105,9 +102,8 @@ it('counts only the resolved company\'s branches on the dashboard', function ():
         Branch::create(['code' => 'B3', 'name' => 'Rival Branch Three']);
     });
 
-    $this->actingAs($user)
-        ->get('/dashboard')
-        ->assertInertia(fn (AssertableInertia $page) => $page->where('branchCount', 1));
+    expect($this->withCompany($mine, fn (): int => Branch::query()->count()))->toBe(1)
+        ->and($this->withCompany($theirs, fn (): int => Branch::query()->count()))->toBe(3);
 });
 
 it('provisions every role with its default data scope', function (): void {

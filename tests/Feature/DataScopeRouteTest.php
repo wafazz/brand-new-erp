@@ -200,3 +200,45 @@ it('redacts sensitive attributes from audit payloads', function (): void {
         expect($encoded)->not->toContain('secret-password');
     });
 });
+
+it('renders the dashboard with figures limited to the user scope', function (): void {
+    $f = routeFixture();
+
+    grant($f['company'], CompanyRole::Salesperson, 'reports.view', DataScope::Own);
+
+    $this->actingAs($f['alice'])
+        ->get('/dashboard')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->component('Dashboard')
+            ->where('figures.variant', 'salesperson')
+            ->where('figures.revenue', '0.0000')
+            ->has('availableVariants')
+        );
+});
+
+it('offers an owner more dashboard variants than a salesperson', function (): void {
+    $f = routeFixture();
+
+    grant($f['company'], CompanyRole::Salesperson, 'reports.view', DataScope::Own);
+    grant($f['company'], CompanyRole::Owner, 'reports.view', DataScope::Company);
+
+    $this->actingAs($f['owner'])
+        ->get('/dashboard')
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('availableVariants', ['management', 'sales', 'marketing']));
+
+    $this->actingAs($f['alice'])
+        ->get('/dashboard')
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('availableVariants', ['salesperson']));
+});
+
+it('refuses a dashboard variant the role is not entitled to', function (): void {
+    $f = routeFixture();
+
+    grant($f['company'], CompanyRole::Salesperson, 'reports.view', DataScope::Own);
+
+    $this->actingAs($f['alice'])
+        ->get('/dashboard?view=management')
+        ->assertOk()
+        ->assertInertia(fn (AssertableInertia $page) => $page->where('figures.variant', 'salesperson'));
+});

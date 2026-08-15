@@ -74,6 +74,16 @@ class User extends Authenticatable
             ->pluck('branches.id');
     }
 
+    /** @return array<int, string> */
+    public function salesTeamIds(): array
+    {
+        return SalesTeamMember::query()
+            ->where('user_id', $this->getKey())
+            ->where('is_active', true)
+            ->pluck('sales_team_id')
+            ->all();
+    }
+
     /** @return Collection<int, string> */
     public function subordinateUserIdsFor(string $companyId): Collection
     {

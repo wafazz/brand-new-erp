@@ -18,20 +18,21 @@ class PermissionRegistry
         'roles' => ['view', 'create', 'update', 'delete'],
         'modules' => ['view', 'manage'],
         'audit' => ['view', 'export'],
+        'reports' => ['view', 'export'],
     ];
 
     /** @var array<string, array<int, string>> */
     private const ROLE_GRANTS = [
         'owner' => ['*'],
-        'admin' => ['companies.view', 'branches.*', 'departments.*', 'users.*', 'roles.*', 'modules.*', 'audit.view'],
-        'branch_manager' => ['companies.view', 'branches.view', 'departments.view', 'users.view'],
-        'sales_manager' => ['companies.view', 'branches.view', 'users.view'],
-        'salesperson' => ['companies.view'],
-        'marketer' => ['companies.view'],
-        'marketing_manager' => ['companies.view', 'users.view'],
+        'admin' => ['reports.*', 'companies.view', 'branches.*', 'departments.*', 'users.*', 'roles.*', 'modules.*', 'audit.view'],
+        'branch_manager' => ['reports.view', 'companies.view', 'branches.view', 'departments.view', 'users.view'],
+        'sales_manager' => ['reports.view', 'companies.view', 'branches.view', 'users.view'],
+        'salesperson' => ['reports.view', 'companies.view'],
+        'marketer' => ['reports.view', 'companies.view'],
+        'marketing_manager' => ['reports.view', 'companies.view', 'users.view'],
         'purchaser' => ['companies.view', 'branches.view'],
         'storekeeper' => ['companies.view', 'branches.view'],
-        'accountant' => ['companies.view', 'branches.view', 'audit.view'],
+        'accountant' => ['reports.*', 'companies.view', 'branches.view', 'audit.view'],
         'staff' => ['companies.view'],
     ];
 
