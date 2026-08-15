@@ -2248,17 +2248,21 @@ known-credential account can reach production.
 
 ### What remains before this can go live
 
-> **Status as of 2026-08-15: P9 is NOT closed.** Its gate has two halves — *external security review
-> clean* and *restore rehearsed and documented*. The second is done (Appendix N). The first has not
-> happened and cannot be done from inside this project. Everything else below is either closed or a
-> known, listed gap.
+> **Status as of 2026-08-15: P9 is NOT closed, and one item is why.** Its gate has two halves —
+> *external security review clean* and *restore rehearsed and documented*. The second is done
+> (Appendix N). The first has not happened and **cannot be done from inside this project**.
+>
+> Five of the six items below are now closed. P9-1 is the only one left, and no amount of further
+> work by me can close it: an external review is external by definition. `SECURITY-REVIEW.md` is the
+> scoping brief prepared for whoever performs it, and section 9 of that document is the closing
+> procedure.
 
 
 | ID     | Item                                                                                                                                                                                                             |
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P9-1   | **External security review** — the gate's first half. `SECURITY-REVIEW.md` is the scoping brief for whoever performs it; the closing procedure is section 9 of that document |
 | P9-2 ✔ | ~~Nothing is scheduled~~ **CLOSED** — see Appendix M. Original: nothing is scheduled. Rollups and the reservation sweep have no scheduler entries; dashboards will go stale and expired holds will never release |
-| P9-3 ~ | CI now runs on GitHub Actions. Its **first execution failed**, finding two defects no local run could — see Appendix U. Green run pending |
+| P9-3 ✔ | ~~No CI run against this suite in a real pipeline~~ **CLOSED** — green on GitHub Actions at `9a40f85`, run 31887436160. It took five runs and found five real defects, all documented in Appendix U |
 | P9-4 ✔ | ~~Backups not off-machine, no scheduled rehearsal~~ **CLOSED** — see Appendix N                                                                                                                                  |
 | P9-5 ✔ | ~~**The UI gap.** Nine phases of domain logic sit behind authentication, branch admin, an audit viewer and dashboards~~ **CLOSED** — Appendices O, P, Q, R and S. Sales, purchasing, access, commission and marketing all have screens; the residue is listed as P9-5b…P9-5m |
 | P9-6 ✔ | ~~Q-18 / P4-4 / R-14 — landed cost is still not apportioned~~ **CLOSED** — Appendix M implemented it; Appendix P fixed the by-weight path that had never worked. Q-18 (is the client's cost data real?) remains **their** question, not a code one |
@@ -3097,6 +3101,6 @@ CoreSentinel failures layer during P0, encountered again from the opposite direc
 
 | ID | Item |
 |---|---|
-| U-1 | CI has run four times and failed four times, each finding a real defect. **A green run is still outstanding** — P9-3 does not close until one exists |
+| U-1 ✔ | ~~A green run is still outstanding~~ **CLOSED** — run 31887436160 on `9a40f85` is green across all three jobs. Five runs, five defects, none of them a logic error |
 | U-2 | PHP 8.3 is no longer supported. Dropping the Symfony 8 packages would restore it, if that ever matters to a deployment target |
 | U-3 | No coverage reporting, no static analysis of the frontend beyond `tsc`, and CI does not run the Concurrency suite's multi-process tests under load |
