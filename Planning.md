@@ -1489,7 +1489,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P2 ✔** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
 | **P3 ✔** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
 | **P4 ✔** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
-| **P5** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
+| **P5 ✔** | Sales force \& Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
 | **P6** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
 | **P7** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
 | **P8** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
@@ -1894,3 +1894,82 @@ count. Planting the duplicate fails both that guard and the behavioural test.
 | P4-4 | No landed-cost allocation. `unit_cost` on a GRN line is the PO cost; freight and duty are not apportioned — **this is the accuracy gap behind R-14 and Q-18** |
 | P4-5 | Purchase returns and supplier payment settlement are schema-only |
 | P4-6 | Reservation expiry is swept by `sweepExpired()` but **nothing schedules it** yet |
+
+---
+
+## Appendix H — P5 Gate Evidence (closed 2026-08-15)
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **972 passed, 1,366 assertions** (Unit 63 · Architecture 10 · Isolation 785 · Feature 104 · Concurrency 10) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` | pass |
+| Schema | **85 tables**, zero nullable `company_id` |
+
+### The gate: all twelve questions answered by a named tested query
+
+Each method is named after the question it answers, so the code and §14.3 cannot drift:
+
+| # | Method | Result in the test scenario |
+|---|---|---|
+| 1 | `whereDidThisCustomerComeFrom()` | Facebook / Raya 2026 |
+| 2 | `whereDidThisOrderComeFrom()` | Facebook / Raya 2026 / lead LD-0001 |
+| 3 | `whoGeneratedTheLead()` | Ali (MK-ALI) |
+| 4 | `whoClosedTheOrder()` | Siti, North Team |
+| 5 | `whichCampaignGeneratedRevenue()` | RAYA2026 — MYR 1,000 across 1 order |
+| 6 | `whichMarketerGeneratedRevenue()` | Ali — MYR 1,000 |
+| 7 | `whichSalespersonGeneratedRevenue()` | Siti — MYR 1,000 |
+| 8 | `whichChannelConvertsBest()` | FB: 1 lead, 1 order, MYR 1,000 · WALKIN: 0 |
+| 9 | `whatDidThisCampaignCostVersusReturn()` | spend 500, revenue 1,000, net 500, **ROAS 2.0** |
+| 10 | `whatIsTheCostPerLeadByCampaign()` | 1 lead, spend 500, **CPL 500** |
+| 11 | `whichTeamHitTarget()` | North: target 800, achieved 1,000, **125%, hit** |
+| 12 | `whichBranchGeneratedWhat()` | HQ — MYR 1,000 |
+
+### ADR-008 behaviour, tested
+
+- **First touch wins.** Two marketers touch one lead three days apart; credit goes to the
+  first, and `lastTouchFor()` still returns the second — the data for a future rule change is
+  retained rather than discarded.
+- **Every touch kept.** Three touches on one lead, all three stored.
+- **Attribution is frozen on the order.** Re-attributing throws:
+  *"Attribution is frozen once an order exists, because commission is paid on it."*
+- **Unattributed is first-class.** A walk-in order returns a populated answer with
+  `attributed: false` and null dimensions — never defaulted to a convenient marketer.
+- **A converted customer inherits its lead's first touch**, which is what makes Q1 answerable
+  for customers that began as leads.
+
+### A tenant-isolation hole caught before it shipped
+
+The twelve reports are raw query-builder aggregates, and **`DB::table()` bypasses the Eloquent
+global scope entirely**. As first written, every report would have summed revenue across all
+companies. Fixed by scoping each query explicitly (16 filters), and guarded permanently: an
+architecture test fails any file that uses `DB::table()` without ever mentioning `company_id`.
+
+### An honest note on proving that fix
+
+Three successive planted violations did **not** fail the cross-company test, because the
+scoping is layered — `attributions` and the joined `orders` are each filtered, so removing
+either alone still yields the right answer. Only stripping **every** filter from the query made
+it fail (2 rows instead of 1). That is redundant protection rather than a weak test, but it is
+worth stating plainly: a single-mutation proof was inconclusive here, and the conclusion
+required removing the whole layer.
+
+### A PostgreSQL constraint worth knowing
+
+`FOR UPDATE is not allowed with aggregate functions`. The touch-sequence allocator was written
+as `lockForUpdate()->max('sequence')`, which is invalid on Postgres and fails at runtime, not at
+analysis. Rewritten to lock the **last row** and compute the next value in PHP, with a retry on
+unique violation for the first-insert race.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P5-1 | **No UI for any P5 entity.** Leads, campaigns, marketers, sales teams and the twelve reports are all service-layer only |
+| P5-2 | Referral and promo codes have schema and models but **no capture path** — nothing resolves a code at order entry into an attribution touch yet |
+| P5-3 | Sales activities, customer visits, follow-ups and the pipeline are schema-only; no service, no kanban |
+| P5-4 | `whichTeamHitTarget()` measures revenue only. Other target metrics are a column value with no calculator |
+| P5-5 | Campaign spend is captured per `(campaign, period)` and is **ready for P6's ad-spend allocation**, but nothing allocates it to orders yet |
+| P5-6 | Attribution touches are recorded by explicit service calls; there is no web capture (UTM landing, click id) |

@@ -58,6 +58,19 @@
         "state-machine"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 15:37:54",
+      "entry": "P4 Inventory and Purchasing gate CLOSED. All three criteria met and each proven by mutation: SUM(movements) == on_hand asserted per stock line across mixed operations and a full order lifecycle; the last unit sells to exactly 1 of 8 concurrent processes and oversells on 3 of 3 runs when the row lock is removed; the three-way match reports every discrepancy and blocks payment with a readable reason. Deliberately avoided both OMS reservation defects - commit and release each take their own lock (H-02) and reservations are iterated in id order for a single deterministic lock order (H-03). Closed the two gaps carried out of P3: stock now reserves on allocation via an OrderStatusChanged domain event so Orders never reaches into Inventory directly, and product tax applies per line for inclusive and exclusive rates. Approval engine routes by amount bands stored as data rows, refuses self-approval, and keeps an append-only trail. Found a real Laravel defect: the framework auto-discovers app/Listeners, so my additional manual Event::listen registered it twice and every allocation reserved stock TWICE - it presented as reservation logic rather than wiring. Guarded by a listener-count test. 777 tests, 69 tables.",
+      "tags": [
+        "p4",
+        "erp",
+        "gate-closed",
+        "inventory",
+        "purchasing",
+        "approvals"
+      ],
+      "agent": "Iris"
     }
   ]
 }

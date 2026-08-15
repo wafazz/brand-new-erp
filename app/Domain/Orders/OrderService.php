@@ -4,10 +4,12 @@ declare(strict_types=1);
 
 namespace App\Domain\Orders;
 
+use App\Domain\Attribution\AttributionService;
 use App\Domain\Numbering\DocumentNumberService;
 use App\Domain\Pricing\PriceResolver;
 use App\Enums\PaymentStatus;
 use App\Models\Customer;
+use App\Models\Lead;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Payment;
@@ -25,6 +27,7 @@ class OrderService
         private readonly OrderStateMachine $states,
         private readonly OrderMutabilityPolicy $policy,
         private readonly OrderEventRecorder $events,
+        private readonly AttributionService $attribution,
     ) {}
 
     /**
@@ -59,6 +62,19 @@ class OrderService
             }
 
             $this->recalculate($order);
+
+            $lead = isset($data['lead_id']) ? Lead::query()->find($data['lead_id']) : null;
+
+            $this->attribution->freezeOntoOrder($order->refresh(), $lead, $actor);
+
+            if ($lead !== null) {
+                $lead->forceFill([
+                    'converted_order_id' => $order->getKey(),
+                    'converted_customer_id' => $order->customer_id,
+                    'converted_at' => now(),
+                    'status' => 'won',
+                ])->save();
+            }
 
             $this->events->record(
                 $order,

@@ -8,11 +8,16 @@ use App\Models\ApprovalAction;
 use App\Models\ApprovalFlow;
 use App\Models\ApprovalLevel;
 use App\Models\ApprovalRequest;
+use App\Models\Attribution;
+use App\Models\AttributionTouch;
 use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\Brand;
 use App\Models\BundleItem;
+use App\Models\Campaign;
+use App\Models\CampaignCost;
 use App\Models\Category;
+use App\Models\Channel;
 use App\Models\Company;
 use App\Models\CompanyModuleSetting;
 use App\Models\CompanyUser;
@@ -25,12 +30,17 @@ use App\Models\Department;
 use App\Models\DocumentSequence;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptItem;
+use App\Models\Lead;
+use App\Models\LeadActivity;
+use App\Models\Marketer;
+use App\Models\MarketingTeam;
 use App\Models\Module;
 use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Permission;
+use App\Models\PipelineStage;
 use App\Models\PriceList;
 use App\Models\PriceListItem;
 use App\Models\Product;
@@ -42,8 +52,13 @@ use App\Models\PurchaseOrder;
 use App\Models\PurchaseOrderItem;
 use App\Models\PurchaseRequest;
 use App\Models\PurchaseRequestItem;
+use App\Models\ReferralCode;
 use App\Models\Role;
 use App\Models\RolePermissionScope;
+use App\Models\SalesActivity;
+use App\Models\SalesTarget;
+use App\Models\SalesTeam;
+use App\Models\SalesTeamMember;
 use App\Models\Stock;
 use App\Models\StockAdjustment;
 use App\Models\StockAdjustmentItem;
@@ -58,6 +73,7 @@ use App\Models\SupplierBillItem;
 use App\Models\SupplierContact;
 use App\Models\SupplierPayment;
 use App\Models\TaxRate;
+use App\Models\Territory;
 use App\Models\TierPrice;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
@@ -197,6 +213,25 @@ function newApprovalFlow(string $suffix): ApprovalFlow
     ]);
 }
 
+function newSalesTeam(string $suffix): SalesTeam
+{
+    return SalesTeam::create(['code' => 'ST-'.$suffix.'-'.str()->random(4), 'name' => 'Team '.$suffix]);
+}
+
+function newCampaign(string $suffix): Campaign
+{
+    return Campaign::create(['code' => 'CP-'.$suffix.'-'.str()->random(4), 'name' => 'Campaign '.$suffix]);
+}
+
+function newLead(string $suffix): Lead
+{
+    return Lead::create([
+        'reference' => 'LD-'.$suffix.'-'.str()->random(4),
+        'name' => 'Lead '.$suffix,
+        'captured_at' => now(),
+    ]);
+}
+
 function seedRowFor(string $class, Company $company): Model
 {
     return app(CompanyContext::class)->runAs($company->getKey(), function () use ($class): Model {
@@ -255,6 +290,54 @@ function seedRowFor(string $class, Company $company): Model
             PromotionRule::class => ['code' => 'PM-'.$suffix, 'name' => 'Promo '.$suffix, 'discount_type' => 'percent', 'discount_value' => '5'],
             DocumentSequence::class => ['key' => 'seq-'.$suffix, 'prefix' => 'SQ'],
             Order::class => ['order_number' => 'SO-'.$suffix, 'customer_name' => 'Walk-in '.$suffix],
+            Territory::class => ['code' => 'TR-'.$suffix, 'name' => 'Territory '.$suffix],
+            SalesTeam::class => ['code' => 'ST-'.$suffix, 'name' => 'Team '.$suffix],
+            SalesTeamMember::class => [
+                'sales_team_id' => newSalesTeam($suffix)->getKey(),
+                'user_id' => newUser($suffix.'stm')->getKey(),
+            ],
+            SalesTarget::class => [
+                'sales_team_id' => newSalesTeam($suffix.'tg')->getKey(),
+                'period' => '2026-08',
+                'target_amount' => '10000',
+            ],
+            PipelineStage::class => ['code' => 'PS-'.$suffix, 'name' => 'Stage '.$suffix],
+            SalesActivity::class => [
+                'user_id' => newUser($suffix.'sa')->getKey(),
+                'type' => 'call',
+                'summary' => 'Called the customer.',
+                'occurred_at' => now(),
+            ],
+            Channel::class => ['code' => 'CH-'.$suffix, 'name' => 'Channel '.$suffix],
+            MarketingTeam::class => ['code' => 'MT-'.$suffix, 'name' => 'Marketing '.$suffix],
+            Marketer::class => ['user_id' => newUser($suffix.'mk')->getKey(), 'code' => 'MK-'.$suffix],
+            Campaign::class => ['code' => 'CP-'.$suffix, 'name' => 'Campaign '.$suffix],
+            CampaignCost::class => [
+                'campaign_id' => newCampaign($suffix)->getKey(),
+                'period' => '2026-08',
+                'amount' => '500',
+                'spent_on' => now()->toDateString(),
+            ],
+            ReferralCode::class => ['code' => 'RC-'.$suffix],
+            Lead::class => ['reference' => 'LD-'.$suffix, 'name' => 'Lead '.$suffix, 'captured_at' => now()],
+            LeadActivity::class => [
+                'lead_id' => newLead($suffix)->getKey(),
+                'type' => 'call',
+                'summary' => 'Rang the lead.',
+                'occurred_at' => now(),
+            ],
+            AttributionTouch::class => [
+                'subject_type' => Lead::class,
+                'subject_id' => newLead($suffix.'at')->getKey(),
+                'sequence' => 1,
+                'source' => 'facebook',
+                'occurred_at' => now(),
+            ],
+            Attribution::class => [
+                'attributable_type' => Lead::class,
+                'attributable_id' => newLead($suffix.'ab')->getKey(),
+                'captured_at' => now(),
+            ],
             OrderItem::class => [
                 'order_id' => newOrder($suffix)->getKey(),
                 'sku' => 'VR-'.$suffix,

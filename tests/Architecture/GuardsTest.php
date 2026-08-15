@@ -164,3 +164,24 @@ it('registers each domain listener exactly once', function (): void {
         'so a manual Event::listen for the same pair doubles every side effect.'
     );
 });
+
+it('scopes every raw query builder usage to a company', function (): void {
+    $offenders = [];
+
+    foreach (phpSourceFiles() as $path) {
+        $contents = (string) file_get_contents($path);
+
+        if (! str_contains($contents, 'DB::table(')) {
+            continue;
+        }
+
+        if (! str_contains($contents, 'company_id')) {
+            $offenders[] = str_replace(dirname(__DIR__, 2).'/', '', $path);
+        }
+    }
+
+    expect($offenders)->toBeEmpty(
+        'A file uses DB::table() without ever mentioning company_id. '.
+        'The query builder bypasses the Eloquent global scope, so tenancy must be applied by hand.'
+    );
+});
