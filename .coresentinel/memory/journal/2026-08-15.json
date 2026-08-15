@@ -1,0 +1,16 @@
+{
+  "date": "2026-08-15",
+  "entries": [
+    {
+      "time": "2026-08-15 13:06:35",
+      "entry": "SME ERP planning phase completed under CoreSentinel governance. Bound the empty project to the Core first (ADR-003 prevents fact leakage), then inspected 36 sibling Laravel projects and ran 3 read-only specialist deep-dives (SMEOS architecture, SaaS-OMS order engine, commission/attribution across dzi-holistik + AgentStockit + SAAS-Agent). Key discovery: CoreSentinel held ZERO domain knowledge (8 recall queries, 0 hits; empty pattern library) because Phase-8 persistence was never run for the prior ERP-adjacent projects. Prior art supplies ~60 percent of the kernel (tenancy, money, state machines, isolation testing, CI guards) and supplies a catalogue of 10 verified commission anti-patterns including two live duplicate-payment defects. Wrote Planning.md (1420 lines, 45 sections). Deliberately did NOT record the 12 proposed ADRs to the decision ledger - approval is a human act, and recording a proposal as a decision is the exact failure 55-self-evolution.md separates approve from apply to prevent.",
+      "tags": [
+        "planning",
+        "erp",
+        "coresentinel",
+        "prior-art"
+      ],
+      "agent": "Iris"
+    }
+  ]
+}

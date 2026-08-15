@@ -1,0 +1,46 @@
+{
+  "coresentinel_api": "1.0",
+  "generated_at": "2026-08-15 12:52:33",
+  "project": {
+    "name": "Brand New ERP",
+    "root": "/Users/wafazztechnology/Desktop/Codex Lure/project/Brand New ERP",
+    "stack": [
+      "General"
+    ],
+    "frameworks": [],
+    "test_runner": null,
+    "key_files": []
+  },
+  "git": {
+    "branch": null,
+    "commit": null,
+    "uncommitted": 0,
+    "recent_commits": []
+  },
+  "memory_facts": [
+    {
+      "layer": "project",
+      "scope": "core",
+      "fact": "CoreSentinel utilizes Python 3.8+ CLI with PowerShell/Bash wrappers",
+      "confidence": 0.98,
+      "classification": "Known (Empirically Verified)",
+      "source": "coresentinel.py + setup.ps1"
+    },
+    {
+      "layer": "project",
+      "scope": "core",
+      "fact": "Verification engine executes 6-point evidence checks",
+      "confidence": 0.99,
+      "classification": "Known (Empirically Verified)",
+      "source": "coresentinel.py"
+    },
+    {
+      "layer": "project",
+      "scope": "core",
+      "fact": "Memory ecosystem spans 3 engines: coresentinel_memory (store), coresentinel_recall (retrieval, journal, briefing), coresentinel_lifecycle (decay, promote, consolidate, compact, snapshot)",
+      "confidence": 0.99,
+      "classification": "Known (Empirically Verified)",
+      "source": "coresentinel_recall.py, coresentinel_lifecycle.py"
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "coresentinel_api": "1.0",
+  "project_name": "Brand New ERP",
+  "core_dir": "/Users/wafazztechnology/Desktop/CS",
+  "initialized_at": "2026-08-15 12:52:33",
+  "stack": [
+    "General"
+  ],
+  "frameworks": [],
+  "test_runner": null,
+  "verification": {
+    "command": "coresentinel verify",
+    "pass_threshold": 80
+  },
+  "bound_hosts": []
+}
