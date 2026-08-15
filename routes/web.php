@@ -19,6 +19,8 @@ use App\Http\Controllers\Marketing\AttributionReportController;
 use App\Http\Controllers\Marketing\CampaignController;
 use App\Http\Controllers\Marketing\ChannelController;
 use App\Http\Controllers\Marketing\MarketerController;
+use App\Http\Controllers\Payments\BillplzWebhookController;
+use App\Http\Controllers\Payments\PaymentLinkController;
 use App\Http\Controllers\Pos\TillController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Purchasing\ApprovalController;
@@ -39,6 +41,9 @@ Route::middleware('guest')->group(function (): void {
 });
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
+
+Route::post('/payments/billplz/callback', [BillplzWebhookController::class, 'callback'])->name('billplz.callback');
+Route::get('/payments/billplz/return', [BillplzWebhookController::class, 'return'])->name('billplz.return');
 
 Route::get('/', fn () => redirect('/dashboard'));
 
@@ -101,6 +106,7 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');
     Route::post('/invoices/{invoice}/payments', [InvoiceController::class, 'recordPayment'])->name('invoices.payments.store');
     Route::post('/invoices/{invoice}/void', [InvoiceController::class, 'void'])->name('invoices.void');
+    Route::post('/invoices/{invoice}/payment-link', [PaymentLinkController::class, 'store'])->name('invoices.payment_link');
 
     Route::get('/inventory', [StockController::class, 'index'])->name('inventory.index');
     Route::get('/inventory/create', [StockController::class, 'create'])->name('inventory.create');

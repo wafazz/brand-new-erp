@@ -20,15 +20,18 @@ and marketing attribution, for a Malaysian company operating across multiple bra
 | Database | PostgreSQL 16 |
 | Frontend | Inertia 3 + React 19 + TypeScript, server-rendered routing, no separate API |
 | Auth | Session cookie, single `web` guard, no tokens, no SSO, no 2FA |
+| Payments | Billplz (FPX/cards). Hosted payment page — **no card data ever reaches this system** |
 | Authorization | `spatie/laravel-permission` in teams mode + a custom data-scope layer |
-| Routes | 108 total, 54 state-changing |
+| Routes | 111 total, 56 state-changing (1 unauthenticated, signature-verified) |
 | Roles | 11 | 
-| Permissions | 65 |
+| Permissions | 74 |
 | Data scopes | 5 (own, team, branch, company, all) |
-| Tests | 1,496 passing / 2,879 assertions |
+| Tests | 1,720 passing / 3,557 assertions |
 
-There is **no public API, no webhook receiver, and no file upload**. Every route requires a session
-except `GET|POST /login`.
+There is no public API and no file upload. Every route requires a session except `GET|POST /login`
+and **two Billplz payment routes, which are authenticated by HMAC signature rather than by a
+session** — see 3.8. Those two are the only unauthenticated state-changing surface in the system and
+deserve a disproportionate share of your time.
 
 ---
 
@@ -138,6 +141,42 @@ inside a transaction. **That escape hatch is worth attacking** — see `App\Doma
 
 ---
 
+### 3.8 The Billplz callback — the only route without a session
+
+`POST /payments/billplz/callback` has no `auth` and no `company` middleware. It cannot: Billplz
+calls it server-to-server. Its entire authentication is `App\Domain\Payments\BillplzSignature`,
+an HMAC-SHA256 over the sorted callback parameters. **If that check can be beaten, anybody who
+knows a bill ID can mark an invoice paid, post a journal entry and move cash-flow figures.**
+
+It is also exempt from CSRF (`bootstrap/app.php`) for the same reason.
+
+What I did to contain it, all of which is worth attacking:
+
+| Control | Where |
+|---|---|
+| Signature checked **before** the bill is looked up, so a 403 is never a lookup miss in disguise | `BillplzWebhookController::callback` |
+| A missing or empty signature key makes every callback fail closed rather than open | `BillplzSignature::matches` |
+| `hash_equals`, not `===` | same |
+| Settling is idempotent — Billplz retries, and a replay must not credit twice | `PaymentLinkService::apply`, row locked `FOR UPDATE` |
+| The credited amount is `min(what we billed, what the callback claims, what is outstanding)` | same |
+| The **browser redirect settles nothing.** It is under the payer's control; only the server-to-server callback moves money | `BillplzWebhookController::return` |
+| The callback carries no company, so the company is taken from the stored intent, not from the message | `PaymentLinkService::settle` |
+
+Specific things I would try:
+
+1. **Length-extension or parameter-injection on the signature source string.** The source is
+   `key1value1|key2value2|…` sorted by key, with no escaping. A value containing a `|` may be able
+   to impersonate a different parameter set. I have not proven this is safe.
+2. Replaying a genuine callback against a *different* intent.
+3. Sending `paid_amount` far above or below the billed amount (both are tested; try the edges —
+   negative, non-numeric, exponent notation, values above `PHP_INT_MAX`).
+4. Racing two identical callbacks concurrently — the replay guard relies on `lockForUpdate`.
+5. Whether `settle()` can be reached with an intent belonging to company A while a session for
+   company B is active.
+
+**No signature test exists for the `|` separator concern in item 1.** I flagged it rather than
+fixing it because I am not confident I know the right fix, and a wrong one would look reassuring.
+
 ## 4. What is already asserted, so you can verify rather than rediscover
 
 The `Security` suite (30 tests) runs on every commit and asserts:
@@ -154,6 +193,7 @@ The `Security` suite (30 tests) runs on every commit and asserts:
 | No privilege boolean on `users` | same |
 | `APP_DEBUG` never true in production | same |
 | No secret in `.env.example` | same |
+| Every session-exempt route refuses a forged **and** an unsigned signature | same — the exemption list and the proof walk the same array |
 
 The `Isolation` suite (1,027 tests) is **reflection-driven**: it discovers every company-scoped
 model and asserts cross-company invisibility. Adding a scoped model without a seed recipe fails the
@@ -170,7 +210,7 @@ Run them yourself:
 
 Every authorization guard in this codebase was verified by **planting the violation** — removing the
 check, confirming the test fails, restoring it. A green test that has never been seen to fail proves
-nothing, and this method has caught nine defects where a test was passing for the wrong reason.
+nothing, and this method has caught eleven defects where a test was passing for the wrong reason.
 
 **It is still self-assessment.** It cannot find what I did not think to test. That is what you are
 for.
@@ -190,6 +230,7 @@ Recorded in full in `Planning.md`. Listed here so you do not spend time on them.
 | D-2 | An append-only audit table blocked company deletion, colliding with PDPA erasure. Resolved with a scoped purge flag |
 | D-3 | Three authorization tests passed for the wrong reason — a *different* guard was refusing. Rewritten to isolate |
 | D-6 | Two access-control guards were unreachable; re-submitting an unchanged role counted as granting it |
+| G-1 | A Billplz callback claiming a non-positive amount credited nothing but still marked the payment intent settled, so the genuine callback behind it would have been discarded as a replay and the payment lost |
 
 ---
 
@@ -207,6 +248,8 @@ Please confirm these are acceptable rather than reporting them as findings.
 | **No audit of reads** | Only mutations are audited |
 | **Attribution cannot be captured from the web** | No UTM/landing endpoint exists |
 | **No approval-flow setup screen** | Without a flow, purchase approval is a direct decision gated on `purchasing.approve` |
+| **Billplz has never been tested against the live provider** | Every payment test fakes the HTTP layer. The signature algorithm is implemented from the published spec and has **not** been confirmed against a real sandbox callback |
+| **No refund through Billplz** | A gateway refund is made in the Billplz dashboard; this system only records it |
 
 ---
 

@@ -1494,7 +1494,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes                                                                                                                                                         | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
 | **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, exports                                                                                                                                                                                     | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
 | **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
-| **P10 ~** | Optional modules       | **HR ~** (leave), Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, **Subscriptions ✔**                                                                                                                                        | Per module. POS — V–AA. CRM — AB. HR leave — AD. Subscriptions — AF                                                                                                                           |
+| **P10 ~** | Optional modules       | **HR ~** (leave), Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, **Subscriptions ✔**, **Online payment ✔** (Billplz)                                                                                                        | Per module. POS — V–AA. CRM — AB. HR leave — AD. Subscriptions — AF. Billplz — AG                                                                                                             |
 
 **Hard scope gate:** no work past P4 until one real SME is using P0–P4. Adopted from SMEOS's
 Sage veto, which is the most valuable governance rule in that document.
@@ -3928,3 +3928,102 @@ still commits.** The assertion did its job and the shell ran on regardless.
 | AF-5 | Nothing warns anybody when a subscription invoice goes unpaid. Dunning does not exist |
 | AF-6 | Quantity can be changed only in the database — no screen for it, though the field is honoured |
 | AF-7 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix AG — Billplz: money that arrives without anybody typing it (2026-08-16)
+
+AF-1 read *"nothing collects the money — no card on file, no direct debit, no gateway."* I judged it
+accurate but not completable, on the grounds that a gateway needs a merchant account and credentials
+I do not have. Fakrul has a Billplz account, which removed the blocker, and the work went ahead.
+
+### What was built
+
+| Piece | What it does |
+|---|---|
+| `config/billplz.php` | API key, X-Signature key, collection ID, sandbox flag — all from `.env`, none committed |
+| `payment_intents` table | One row per bill raised: invoice, amount, provider reference, status, the last callback received |
+| `BillplzClient` | Creates a bill. Refuses to run at all unless all three credentials are present |
+| `BillplzSignature` | HMAC-SHA256 over the sorted callback parameters. **This is the whole authentication boundary for the webhook** |
+| `PaymentLinkService` | Raises a bill for what is outstanding; applies a verified callback exactly once |
+| `POST /payments/billplz/callback` | Server-to-server. No session, no company — signature only |
+| `GET /payments/billplz/return` | Where the payer's browser lands. **Settles nothing** |
+| Invoice screen | "Request online payment", the resulting link, copy button |
+
+Money does not take a new path. A verified callback calls the existing
+`InvoiceService::recordPayment`, so the ledger entry, the cash-flow row and the status transition are
+the same ones a hand-recorded payment produces. A second way to pay an invoice would have been a
+second version of the truth.
+
+### The decision that shaped the rest
+
+A payment gateway forces a route that no session can protect. The security suite has asserted since
+P0 that **every** state-changing route carries `auth` and `company`; the callback can carry neither.
+
+The temptation was to add the URI to the exemption list and move on. Instead the list became a named
+constant that **two** tests walk: one skips those routes when checking for session middleware, and
+the other posts a forged signature and an unsigned request to each and requires 403. An exemption is
+now only as cheap as the signature check behind it. Adding a route to that array without a working
+signature fails the suite.
+
+The second decision: **the browser redirect settles nothing.** It is under the payer's control, and
+treating it as proof of payment would let anyone who can read a URL mark an invoice paid. It reports;
+the server-to-server callback pays.
+
+### What planting found — twice in one wave
+
+Every guard was verified by deleting it. Two of my own tests were green for the wrong reason.
+
+**The replay test proved nothing.** Deleting the idempotency guard entirely left all fifteen tests
+passing. A *different* guard — the clamp of the credited amount to what is still outstanding — was
+refusing the replay. Because the test billed the invoice in full, the clamp caught the second
+callback at zero and the replay guard was never reached. The same mistake made the amount-tampering
+test hollow: it passed with the code trusting the callback's own figure, because the clamp capped the
+inflated claim anyway.
+
+Both were rewritten to bill **part** of a larger invoice, so a replay or an inflated claim stays
+below what is outstanding and the clamp cannot cover for the guard under test. Re-planting then
+failed exactly the test that names each guard, and nothing else.
+
+That is the seventh and eighth time in this project a test has been found passing because a guard
+other than the one it names did the refusing. The pattern is always the same shape: **a fixture
+chosen for convenience makes two guards indistinguishable.**
+
+### A real defect, found by writing the edge case down
+
+A callback claiming a non-positive `paid_amount` credited nothing to the invoice — correct — but
+still marked the payment intent `paid`. The genuine callback arriving behind it would then match the
+replay guard and be discarded in silence. **A customer's payment would have vanished.**
+
+Found because the negative-amount test asserted only that the invoice was not credited; asking the
+further question — *what state is the intent in?* — exposed it. The intent now stays open unless
+money actually moved.
+
+### Deliberately not done
+
+The signature source string is `key1value1|key2value2` sorted by key, with nothing escaping the
+separator, so `{ab: 'c'}` and `{a: 'bc'}` sign identically. A test proves that ambiguity cannot be
+aimed at a bill the sender does not already hold a genuine callback for, but I have not proven it is
+harmless in general. It is written up in `SECURITY-REVIEW.md` §3.8 as something to attack rather than
+patched, because a fix I am not confident in would look more reassuring than the flag does.
+
+### The honest limit
+
+**Every payment test fakes the HTTP layer.** The signature algorithm is implemented from the
+published specification and has never been confirmed against a real sandbox callback. Nothing here
+proves Billplz agrees with my arithmetic — only that this system is internally consistent about it.
+That confirmation needs one sandbox payment against a publicly reachable callback URL, and it is the
+first thing to do before this touches a real customer.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AG-1 | **Not one real payment has been made.** The signature is implemented from the spec and faked in every test. One sandbox payment through a tunnelled callback URL would settle it |
+| AG-2 | The `\|` separator ambiguity in the signature source string is flagged, tested at one angle, and unproven in general |
+| AG-3 | No refund through Billplz. A gateway refund happens in their dashboard and is only recorded here |
+| AG-4 | Subscriptions still do not attach a payment link automatically — a recurring invoice must have one raised by hand, so AF-1 is narrowed rather than closed |
+| AG-5 | No dunning. AF-5 stands: nothing chases an unpaid invoice, and nothing surfaces which unpaid invoices are recurring revenue |
+| AG-7 | No receipt is emailed. The redirect promises one; no mail transport exists |
+| AG-8 | Still true: **no screen has been used by a human** |

@@ -61,6 +61,7 @@ use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\OrderItem;
 use App\Models\Payment;
+use App\Models\PaymentIntent;
 use App\Models\Permission;
 use App\Models\PipelineStage;
 use App\Models\PosCashMovement;
@@ -380,6 +381,11 @@ function seedRowFor(string $class, Company $company): Model
                 'quantity' => '1',
                 'unit_price' => '10',
                 'line_total' => '10',
+            ],
+            PaymentIntent::class => [
+                'invoice_id' => Invoice::create(['invoice_number' => 'INV3-'.$suffix, 'customer_name' => 'A'])->getKey(),
+                'provider_ref' => 'bill-'.$suffix,
+                'amount' => '100',
             ],
             Account::class => ['code' => 'AC-'.$suffix, 'name' => 'Account '.$suffix, 'type' => 'asset'],
             JournalEntry::class => [

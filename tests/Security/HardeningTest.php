@@ -49,13 +49,22 @@ it('rate limits the login endpoint', function (): void {
         ->toBeTrue('The login endpoint is not rate limited.');
 });
 
+/**
+ * Routes authenticated by a payment provider's signature rather than by a session.
+ *
+ * Adding a URI here removes it from the assertion below, so the next test walks this
+ * same list and proves each entry refuses a forged signature. An exemption without a
+ * working signature check fails the suite.
+ */
+const SIGNATURE_AUTHENTICATED = ['payments/billplz/callback'];
+
 it('protects every state-changing route with authentication and a company', function (): void {
     $unprotected = [];
 
     foreach (Route::getRoutes()->getRoutes() as $route) {
         $methods = array_intersect($route->methods(), ['POST', 'PUT', 'PATCH', 'DELETE']);
 
-        $exempt = ['login', 'logout'] + [];
+        $exempt = ['login', 'logout', ...SIGNATURE_AUTHENTICATED];
 
         if ($methods === [] || in_array($route->uri(), $exempt, true) || str_starts_with($route->uri(), 'horizon')) {
             continue;
@@ -69,6 +78,34 @@ it('protects every state-changing route with authentication and a company', func
     }
 
     expect($unprotected)->toBeEmpty();
+});
+
+it('refuses a forged signature on every route exempted from session authentication', function (): void {
+    config()->set('billplz.x_signature_key', 'the-real-key');
+
+    foreach (SIGNATURE_AUTHENTICATED as $uri) {
+        $accepted = $this->post('/'.$uri, [
+            'id' => 'forged',
+            'paid' => 'true',
+            'x_signature' => str_repeat('a', 64),
+        ]);
+
+        expect($accepted->status())->toBe(
+            403,
+            "/{$uri} is exempt from session authentication and accepted a forged signature."
+        );
+    }
+});
+
+it('refuses an unsigned request to every route exempted from session authentication', function (): void {
+    config()->set('billplz.x_signature_key', 'the-real-key');
+
+    foreach (SIGNATURE_AUTHENTICATED as $uri) {
+        expect($this->post('/'.$uri, ['id' => 'unsigned', 'paid' => 'true'])->status())->toBe(
+            403,
+            "/{$uri} accepted a request carrying no signature at all."
+        );
+    }
 });
 
 it('applies CSRF protection to the web group', function (): void {

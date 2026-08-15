@@ -23,6 +23,13 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->redirectGuestsTo('/login');
 
+        // Billplz cannot carry a CSRF token. Its callback is authenticated by X-Signature
+        // instead — see App\Domain\Payments\BillplzSignature, which is the only thing
+        // standing between a POST body and a settled invoice.
+        $middleware->validateCsrfTokens(except: [
+            'payments/billplz/callback',
+        ]);
+
         $middleware->alias([
             'company' => ResolveCompany::class,
         ]);

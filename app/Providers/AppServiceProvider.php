@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Domain\Payments\BillplzClient;
+use App\Domain\Payments\BillplzSignature;
 use App\Models\User;
 use App\Support\CompanyContext;
 use Carbon\CarbonImmutable;
@@ -16,6 +18,9 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->singleton(BillplzClient::class, fn (): BillplzClient => new BillplzClient(config('billplz')));
+        $this->app->singleton(BillplzSignature::class, fn (): BillplzSignature => new BillplzSignature(config('billplz.x_signature_key')));
+
         $this->app->singleton(CompanyContext::class);
     }
 

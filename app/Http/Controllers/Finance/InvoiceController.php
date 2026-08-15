@@ -6,11 +6,13 @@ namespace App\Http\Controllers\Finance;
 
 use App\Domain\Finance\AgeingReport;
 use App\Domain\Finance\InvoiceService;
+use App\Domain\Payments\BillplzClient;
 use App\Http\Controllers\Controller;
 use App\Models\BankAccount;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Order;
+use App\Models\PaymentIntent;
 use App\Support\CompanyContext;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -106,7 +108,16 @@ class InvoiceController extends Controller
             'permissions' => [
                 'record_payment' => $user?->can('recordPayment', $invoice) ?? false,
                 'void' => $user?->can('void', $invoice) ?? false,
+                'payment_link' => ($user?->can('payments.create') ?? false)
+                    && app(BillplzClient::class)->configured()
+                    && $invoice->currency === 'MYR',
             ],
+            'paymentLink' => PaymentIntent::query()
+                ->where('invoice_id', $invoice->getKey())
+                ->where('status', 'pending')
+                ->whereNotNull('pay_url')
+                ->latest()
+                ->value('pay_url'),
         ]);
     }
 

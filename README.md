@@ -127,6 +127,39 @@ from a screen.
 action is refused again in the controller, and each refusal has a test that posts straight to the
 endpoint with the button hidden.
 
+## Getting paid without typing it in
+
+An invoice can raise a Billplz payment link — FPX or card, on a page Billplz hosts, so **no card
+number ever reaches this system**. Send the link; when Billplz confirms the payment, the invoice
+settles itself.
+
+That confirmation arrives on the one route in the system with no session behind it, which makes it
+the most interesting thing here from a security point of view:
+
+```mermaid
+flowchart LR
+    I[Invoice] -->|raise bill| B[Billplz]
+    B -->|link| C[Customer pays]
+    C -->|browser returns| R[Thank-you page]
+    C -->|server to server| W{X-Signature valid?}
+    W -->|no| X[403]
+    W -->|yes| P[Payment recorded]
+    P --> L[Ledger + cash flow]
+    R -.->|changes nothing| I
+
+    style W fill:#d97706,color:#fff
+    style X fill:#dc2626,color:#fff
+    style P fill:#059669,color:#fff
+```
+
+Two rules hold that route up. **The signature is the only authentication** — a missing key fails
+closed, and the check runs before the bill is even looked up, so a 403 is never a lookup miss in
+disguise. And **the browser redirect settles nothing**: it is under the payer's control, so it only
+reports, while the server-to-server callback does the work.
+
+Settling is idempotent under a row lock, because Billplz retries. The amount credited is the smallest
+of what was billed, what the callback claims, and what is still owed.
+
 ---
 
 ## What you can actually do in it
@@ -136,7 +169,7 @@ endpoint with the button hidden.
 | **Sales** | **Subscriptions** — recurring billing that raises its own invoices on a schedule · **Point of sale** — till sessions, split tenders, printable receipts, refunds · **Pipeline board** with weighted forecast and follow-ups · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
 | **Catalogue** | Products with inline variants · Inventory with movement history and adjustments |
 | **Purchasing** | Purchase requests · Purchase orders · Goods receipts with landed cost · Supplier bills with three-way match · Approvals inbox |
-| **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates |
+| **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates · **Online payment links** via Billplz (FPX and cards), settled automatically |
 | **Marketing** | Channels · Campaigns with ad spend · Marketers · Attribution reports |
 | **People** | Leave requests, balances and manager approval · Leave types |
 | **Administration** | People · Roles and reach · Branches · Audit log |
@@ -210,7 +243,7 @@ composer gate          # Pint + PHPStan + Pest
 ./vendor/bin/pest
 ```
 
-**1,692 tests, 3,502 assertions**, in six suites that each do a different job:
+**1,726 tests, 3,571 assertions**, in six suites that each do a different job:
 
 | Suite | What it protects |
 |---|---|
@@ -226,8 +259,9 @@ composer gate          # Pint + PHPStan + Pest
 **A test that has never been seen to fail proves nothing.**
 
 Every authorization guard here was verified by deleting it, watching the test go red, and restoring
-it. That practice has caught nine cases where a test was green for the wrong reason — usually
-because a *different* guard was doing the refusing. Green suites are not evidence; falsified ones
+it. That practice has caught eleven cases where a test was green for the wrong reason — almost
+always because a *different* guard was doing the refusing, and a fixture chosen for convenience made
+the two indistinguishable. Green suites are not evidence; falsified ones
 are.
 
 ---
@@ -240,6 +274,9 @@ Stated plainly, because a README that only lists strengths is not useful.
   build.
 - **No external security review.** [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md) is the brief prepared
   for one.
+- **Not one real payment has been taken.** The Billplz integration is implemented from the published
+  specification and every test fakes the HTTP layer. It has never been confirmed against a live
+  sandbox callback.
 - No exports, no credit notes, no 2FA, no password reset by email.
 - Attribution cannot yet be captured from the web — no UTM or landing-page endpoint, so the campaign
   on an order must be set deliberately.

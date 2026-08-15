@@ -37,15 +37,17 @@ interface Props {
     }
     items: Item[]
     bankAccounts: { value: string; label: string }[]
-    permissions: { record_payment: boolean; void: boolean }
+    permissions: { record_payment: boolean; void: boolean; payment_link: boolean }
+    paymentLink: string | null
 }
 
-export default function InvoiceShow({ invoice, items, bankAccounts, permissions }: Props) {
+export default function InvoiceShow({ invoice, items, bankAccounts, permissions, paymentLink }: Props) {
     const [payOpen, setPayOpen] = useState(false)
     const [voidOpen, setVoidOpen] = useState(false)
 
     const payment = useForm({ amount: invoice.outstanding, bank_account_id: '' })
     const voiding = useForm({ reason: '' })
+    const link = useForm({})
 
     const columns: Column<Item>[] = [
         {
@@ -83,6 +85,16 @@ export default function InvoiceShow({ invoice, items, bankAccounts, permissions 
                         {permissions.record_payment && !settled && !isVoid ? (
                             <button type="button" className="btn btn-sm btn-primary" onClick={() => setPayOpen((open) => !open)}>Record payment</button>
                         ) : null}
+                        {permissions.payment_link && !settled && !isVoid ? (
+                            <button
+                                type="button"
+                                className="btn btn-sm btn-outline-primary"
+                                disabled={link.processing}
+                                onClick={() => link.post(`/invoices/${invoice.id}/payment-link`, { preserveScroll: true })}
+                            >
+                                {link.processing ? 'Asking Billplz…' : paymentLink ? 'Refresh payment link' : 'Request online payment'}
+                            </button>
+                        ) : null}
                         {permissions.void && !isVoid ? (
                             <button type="button" className="btn btn-sm btn-outline-danger" onClick={() => setVoidOpen((open) => !open)}>Void</button>
                         ) : null}
@@ -97,6 +109,25 @@ export default function InvoiceShow({ invoice, items, bankAccounts, permissions 
                 />
                 {invoice.due_at ? <StatusBadge label={`Due ${invoice.due_at}`} tone="info" /> : null}
             </div>
+
+            {paymentLink && !settled && !isVoid ? (
+                <div className="alert alert-info d-flex flex-wrap align-items-center gap-2">
+                    <span className="fw-semibold">Online payment link</span>
+                    <code className="flex-grow-1 text-break small">{paymentLink}</code>
+                    <a href={paymentLink} target="_blank" rel="noreferrer" className="btn btn-sm btn-primary">Open</a>
+                    <button
+                        type="button"
+                        className="btn btn-sm btn-outline-secondary"
+                        onClick={() => void navigator.clipboard?.writeText(paymentLink)}
+                    >
+                        Copy
+                    </button>
+                    <div className="small text-body-secondary w-100 mb-0">
+                        Send this to the customer. The invoice settles itself when Billplz confirms the payment — you do
+                        not need to record it by hand.
+                    </div>
+                </div>
+            ) : null}
 
             {payOpen ? (
                 <div className="card mb-3 border-primary">

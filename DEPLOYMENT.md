@@ -196,3 +196,38 @@ sudo systemctl reload php8.4-fpm
 **Migrations are not automatically reversible in production.** Every migration has a `down()`, but
 several drop tables that hold financial records. Restore from the pre-deploy backup instead of
 rolling a migration back, and take that backup *before* the risky DDL, not after it goes wrong.
+
+
+---
+
+## Billplz (online payment collection)
+
+Optional. Leave `BILLPLZ_ENABLED=false` and the "Request online payment" button never appears.
+
+```
+BILLPLZ_ENABLED=true
+BILLPLZ_SANDBOX=true          # false only once a sandbox payment has been proven end to end
+BILLPLZ_API_KEY=
+BILLPLZ_X_SIGNATURE_KEY=
+BILLPLZ_COLLECTION_ID=
+```
+
+All three credentials are required together — the client refuses to raise a bill unless every one is
+present, and an absent X-Signature key makes **every** callback fail closed rather than open.
+
+**The callback URL must be reachable from the public internet.** Billplz calls
+`POST https://your-host/payments/billplz/callback` server-to-server; it is not a browser redirect and
+will not traverse a firewall, a VPN or `localhost`. If that route cannot be reached, bills are still
+created and paid, but no invoice will ever settle. Confirm it with the Billplz sandbox before going
+live:
+
+1. Set `BILLPLZ_SANDBOX=true` and raise a payment link from any issued invoice.
+2. Pay it with a sandbox account.
+3. Confirm the invoice moves to `paid` **on its own**, with a journal entry and a cash-flow row.
+4. Check `payment_intents.last_callback` holds the payload Billplz actually sent.
+
+Only step 3 proves the signature algorithm here agrees with theirs. Until it has been done once, the
+integration is unverified — every test in the suite fakes the HTTP layer.
+
+Rotating the X-Signature key in the Billplz dashboard invalidates in-flight callbacks. Rotate it when
+nothing is outstanding, or expect to reconcile by hand.
