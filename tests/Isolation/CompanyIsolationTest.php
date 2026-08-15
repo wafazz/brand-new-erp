@@ -6,15 +6,36 @@ use App\Exceptions\CrossCompanyAccessException;
 use App\Exceptions\MissingCompanyContextException;
 use App\Models\AuditLog;
 use App\Models\Branch;
+use App\Models\Brand;
+use App\Models\BundleItem;
+use App\Models\Category;
 use App\Models\Company;
 use App\Models\CompanyModuleSetting;
 use App\Models\CompanyUser;
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Customer;
+use App\Models\CustomerAddress;
+use App\Models\CustomerContact;
+use App\Models\CustomerGroup;
 use App\Models\Department;
+use App\Models\DocumentSequence;
 use App\Models\Module;
 use App\Models\Permission;
+use App\Models\PriceList;
+use App\Models\PriceListItem;
+use App\Models\Product;
+use App\Models\ProductBundle;
+use App\Models\ProductImage;
+use App\Models\ProductVariant;
+use App\Models\PromotionRule;
 use App\Models\Role;
 use App\Models\RolePermissionScope;
+use App\Models\Supplier;
+use App\Models\SupplierAddress;
+use App\Models\SupplierContact;
+use App\Models\TaxRate;
+use App\Models\TierPrice;
+use App\Models\UnitOfMeasure;
 use App\Models\User;
 use App\Support\CompanyContext;
 use Illuminate\Database\Eloquent\Model;
@@ -46,6 +67,30 @@ function scopedModels(): array
     return $models;
 }
 
+function newCustomer(string $suffix): Customer
+{
+    return Customer::create(['code' => 'CU-'.$suffix, 'name' => 'Customer '.$suffix]);
+}
+
+function newSupplier(string $suffix): Supplier
+{
+    return Supplier::create(['code' => 'SP-'.$suffix, 'name' => 'Supplier '.$suffix]);
+}
+
+function newProduct(string $suffix): Product
+{
+    return Product::create(['sku' => 'PR-'.$suffix, 'name' => 'Product '.$suffix]);
+}
+
+function newVariant(string $suffix): ProductVariant
+{
+    return ProductVariant::create([
+        'product_id' => newProduct($suffix.'v')->getKey(),
+        'sku' => 'VR-'.$suffix,
+        'selling_price' => '10.0000',
+    ]);
+}
+
 function seedRowFor(string $class, Company $company): Model
 {
     return app(CompanyContext::class)->runAs($company->getKey(), function () use ($class): Model {
@@ -71,6 +116,38 @@ function seedRowFor(string $class, Company $company): Model
                 'enabled' => true,
             ],
             Role::class => ['name' => 'role-'.$suffix, 'guard_name' => 'web'],
+            CustomerGroup::class => ['code' => 'CG-'.$suffix, 'name' => 'Group '.$suffix],
+            Customer::class => ['code' => 'CU-'.$suffix, 'name' => 'Customer '.$suffix],
+            CustomerContact::class => ['customer_id' => newCustomer($suffix)->getKey(), 'name' => 'Contact '.$suffix],
+            CustomerAddress::class => ['customer_id' => newCustomer($suffix)->getKey(), 'line1' => '1 Jalan '.$suffix],
+            Supplier::class => ['code' => 'SP-'.$suffix, 'name' => 'Supplier '.$suffix],
+            SupplierContact::class => ['supplier_id' => newSupplier($suffix)->getKey(), 'name' => 'Contact '.$suffix],
+            SupplierAddress::class => ['supplier_id' => newSupplier($suffix)->getKey(), 'line1' => '2 Jalan '.$suffix],
+            Category::class => ['code' => 'CT-'.$suffix, 'name' => 'Category '.$suffix],
+            Brand::class => ['code' => 'BD-'.$suffix, 'name' => 'Brand '.$suffix],
+            UnitOfMeasure::class => ['code' => 'UOM-'.$suffix, 'name' => 'Unit '.$suffix],
+            TaxRate::class => ['code' => 'TX-'.$suffix, 'name' => 'Tax '.$suffix, 'rate_percent' => '6'],
+            Product::class => ['sku' => 'PR-'.$suffix, 'name' => 'Product '.$suffix],
+            ProductVariant::class => ['product_id' => newProduct($suffix)->getKey(), 'sku' => 'VR-'.$suffix],
+            ProductImage::class => ['product_id' => newProduct($suffix)->getKey(), 'path' => 'products/'.$suffix.'.webp'],
+            ProductBundle::class => ['product_id' => newProduct($suffix)->getKey(), 'pricing_mode' => 'fixed', 'fixed_price' => '99.0000'],
+            BundleItem::class => [
+                'product_bundle_id' => ProductBundle::create([
+                    'product_id' => newProduct($suffix.'b')->getKey(),
+                    'pricing_mode' => 'sum_of_components',
+                ])->getKey(),
+                'product_variant_id' => newVariant($suffix)->getKey(),
+                'quantity' => '2',
+            ],
+            PriceList::class => ['code' => 'PL-'.$suffix, 'name' => 'Price list '.$suffix],
+            PriceListItem::class => [
+                'price_list_id' => PriceList::create(['code' => 'PL-'.$suffix, 'name' => 'List '.$suffix])->getKey(),
+                'product_variant_id' => newVariant($suffix)->getKey(),
+                'price' => '10.0000',
+            ],
+            TierPrice::class => ['product_variant_id' => newVariant($suffix)->getKey(), 'min_quantity' => '10', 'price' => '9.0000'],
+            PromotionRule::class => ['code' => 'PM-'.$suffix, 'name' => 'Promo '.$suffix, 'discount_type' => 'percent', 'discount_value' => '5'],
+            DocumentSequence::class => ['key' => 'seq-'.$suffix, 'prefix' => 'SQ'],
             RolePermissionScope::class => [
                 'role_id' => Role::create([
                     'name' => 'role-'.$suffix,

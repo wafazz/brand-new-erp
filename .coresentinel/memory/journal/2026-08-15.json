@@ -22,6 +22,18 @@
         "tenancy"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 14:14:12",
+      "entry": "P1 Access gate CLOSED. ScopeResolver + Scopeable contract + AppliesDataScope deliver the own/team/branch/company/all axis, fail-closed on every unresolvable path. BasePolicy calls the same resolver as list queries so record access and list access cannot diverge - that shared path is the actual guarantee, not the individual checks. AuditLog is the P1 proving ground: company-scoped, Scopeable on actor and branch, append-only at model AND database trigger. Two real defects found: (1) Laravel's middleware priority() REPLACES the default list rather than merging, which silently put ResolveCompany ahead of Authenticate and made a guest 401 instead of redirect; (2) the append-only DELETE trigger blocked the cascade from companies, making a company with audit rows undeletable - the PDPA collision the plan predicted, resolved with an explicit purge flag. Data scope proven at BOTH the query layer and the HTTP layer, the latter asserting another user's record id appears nowhere in the response body. Three planted violations confirmed the guards are not tautologies. 177 tests, PHPStan level 6, Pint, tsc all clean.",
+      "tags": [
+        "p1",
+        "erp",
+        "gate-closed",
+        "datascope",
+        "audit"
+      ],
+      "agent": "Iris"
     }
   ]
 }

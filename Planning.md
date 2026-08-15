@@ -1486,7 +1486,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 |---|---|---|---|
 | **P0 ✔** | Foundation | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | **GATE CLOSED 2026-08-15** — see Appendix C |
 | **P1 ✔** | Access | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test |
-| **P2** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
+| **P2 ✔** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
 | **P3** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
 | **P4** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
 | **P5** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
@@ -1681,3 +1681,65 @@ All three reverted clean.
 | P1-3 | `attribution` / export scoping (§39 item 14) is asserted for list and aggregate, but there is no export endpoint yet to test against |
 | INC-0001 | `coresentinel verify` still reports a false FAIL on Pest projects |
 | EVO-004 | Standing Rule 7 still `PENDING_REVIEW` |
+
+---
+
+## Appendix E — P2 Gate Evidence (closed 2026-08-15)
+
+### Schema
+
+**44 tables**, 26 CHECK constraints, 28 composite `(company_id, id)` foreign keys, **zero nullable `company_id`**, and every money column `NUMERIC(15,4)` — all verified from `information_schema`.
+
+Added in P2: `customer_groups`, `customers`, `customer_contacts`, `customer_addresses`, `suppliers`, `supplier_contacts`, `supplier_addresses`, `categories`, `brands`, `units_of_measure`, `tax_rates`, `products`, `product_variants`, `product_images`, `product_bundles`, `bundle_items`, `price_lists`, `price_list_items`, `tier_prices`, `promotion_rules`, `document_sequences`.
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **436 passed, 636 assertions** (Unit 63 · Architecture 5 · Isolation 334 · Feature 30 · Concurrency 4) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` | pass |
+
+### Price resolution returns a decomposition
+
+`PriceResolver` walks six sources in order and **records every step it considered, matched or not, with a reason** — not just the winner:
+
+```
+Customer price list  → no dedicated price list
+Group price list     → belongs to no group with a price list
+Quantity tier        → no tier cleared at this quantity
+Branch price list    → no branch supplied
+Wholesale            → not requested
+Base selling price   → MATCHED  100.0000
+```
+
+Promotions apply **on top** of the resolved base rather than as a seventh "first match wins" step — a deviation from §10's flat list, made because a promotion is a discount on a price, not an alternative source of one. `PriceQuote::explain()` renders the sentence a salesperson can defend:
+
+> `Base selling price MYR 100.00 less MYR 10.00 (Ten percent off) = MYR 90.00`
+
+A discount larger than the base clamps to zero and records the full base as the discount — it never produces a negative price.
+
+### Numbering proven under real concurrency
+
+`DocumentNumberService` uses `SELECT … FOR UPDATE` inside a transaction, with a retry on unique violation for the first-allocation race.
+
+The test spawns **8 real OS processes** via `proc_open`, each allocating 10 numbers, and asserts all 80 are unique and form exactly `1..80`. It runs in its own `Concurrency` suite **without** `RefreshDatabase`, because a transaction-wrapped test is invisible to other processes and would prove nothing.
+
+**Anti-tautology proof:** removing `->lockForUpdate()` produced duplicate numbers on **3 of 3 runs**; restoring it passed. The test contends for real.
+
+### Three defects found
+
+| # | Defect |
+|---|---|
+| P2-1 | **A database DEFAULT does not populate an in-memory model.** `Customer::create()` left `currency` null despite the column defaulting to `MYR`, and the resolver threw. Fixed by mirroring meaningful DB defaults into `protected $attributes` on 14 models |
+| P2-2 | **`UnitOfMeasure` mapped to `unit_of_measures`; the table is `units_of_measure`.** Nothing failed until first use. A permanent guard now asserts every model maps to a table that exists |
+| P2-3 | **Larastan types `decimal:N` as float.** Probed at runtime: it returns a **string**. Money was never at risk, but explicit `(string)` casts were added at the boundary plus a unit test asserting the cast type, so a future change to float fails loudly instead of drifting money |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P2-4 | **No UI for any P2 entity.** Customers, suppliers and products have models, schema, scoping and pricing but no controllers or screens. The `PriceResolver` is service-only |
+| P2-5 | `Customer` is the only P2 model that is `Scopeable`. Products and suppliers are company-scoped but carry no owner, so `own`/`team` on them currently fails closed — correct, but it means product visibility is company-wide by design |
+| P2-6 | Channel pricing is a `price_lists.type` value with no resolver step, because channels do not exist until P5. The step slots in without a migration |
+| P2-7 | Product attributes, serial/batch/expiry and discount rules remain deferred per §10 |

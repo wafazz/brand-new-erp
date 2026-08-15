@@ -107,6 +107,15 @@
       "source": "lsof -iTCP -sTCP:LISTEN + psql -p 5433 -tAc 'select version()'",
       "created_at": "2026-08-15 13:36:45",
       "last_verified": "2026-08-15 13:36:45"
+    },
+    {
+      "id": "MEM-d87849a788",
+      "fact": "VERIFIED 2026-08-15: Laravel's decimal:N cast returns a STRING at runtime (number_format output), not a float - confirmed by get_debug_type on ProductVariant::selling_price and TaxRate::rate_percent. Larastan's stubs type it as float, which produces false 'expects string, float given' errors at level 6. Money safety is intact; the fix is explicit (string) casts at the boundary plus a unit test asserting the cast returns a string, so a future framework change to float is caught rather than silently drifting money",
+      "confidence": 0.99,
+      "classification": "Known (Empirically Verified)",
+      "source": "php -r get_debug_type probe against both models",
+      "created_at": "2026-08-15 14:26:19",
+      "last_verified": "2026-08-15 14:26:19"
     }
   ]
 }

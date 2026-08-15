@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+use App\Models\ProductVariant;
+use App\Models\TaxRate;
 use App\Support\Money;
 
 it('refuses to be built from a float', function (): void {
@@ -53,4 +55,14 @@ it('compares amounts', function (): void {
 it('formats for display', function (): void {
     expect(Money::of('1234.5')->format())->toBe('MYR 1,234.50')
         ->and((string) Money::of('99'))->toBe('MYR 99.00');
+});
+
+it('reads decimal casts as strings so money never becomes a float', function (): void {
+    $variant = new ProductVariant(['selling_price' => '19.9900', 'cost_price' => '10.0000']);
+    $tax = new TaxRate(['rate_percent' => '6.0000']);
+
+    expect($variant->selling_price)->toBeString()
+        ->and($variant->cost_price)->toBeString()
+        ->and($tax->rate_percent)->toBeString()
+        ->and(Money::of($variant->selling_price)->toDecimal())->toBe('19.9900');
 });

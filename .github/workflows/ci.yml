@@ -97,7 +97,7 @@ jobs:
         run: |
           count=$(grep -c "^it(" tests/Isolation/*.php | awk -F: '{s+=$2} END {print s}')
           echo "isolation assertions: $count"
-          if [ "$count" -lt 12 ]; then
+          if [ "$count" -lt 24 ]; then
             echo "The isolation suite shrank. Deleting an isolation test breaks the build as loudly as breaking one."
             exit 1
           fi
