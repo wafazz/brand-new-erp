@@ -1490,7 +1490,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P3 ✔** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
 | **P4 ✔** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
 | **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
-| **P6** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
+| **P6 ✔** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
 | **P7** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
 | **P8** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
 | **P9** | Hardening & Launch | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy | External security review clean; restore rehearsed and documented |
@@ -1973,3 +1973,71 @@ unique violation for the first-insert race.
 | P5-4 | `whichTeamHitTarget()` measures revenue only. Other target metrics are a column value with no calculator |
 | P5-5 | Campaign spend is captured per `(campaign, period)` and is **ready for P6's ad-spend allocation**, but nothing allocates it to orders yet |
 | P5-6 | Attribution touches are recorded by explicit service calls; there is no web capture (UTM landing, click id) |
+
+---
+
+## Appendix I — P6 Gate Evidence (closed 2026-08-15)
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **1,094 passed, 1,544 assertions** (Unit 63 · Architecture 10 · Isolation 884 · Feature 127 · Concurrency 10) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` | pass |
+| Schema | **94 tables** |
+
+### The four gate criteria
+
+**1. Re-run is idempotent, and the unique index is proven.** Three consecutive accruals produce one commission. Removing the engine's idempotency check produces a `UniqueConstraintViolationException` rather than a duplicate — the database is the backstop, not the intention.
+
+**2. Reversal produces a contra entry.** The original moves to `reversed`; a `reversal` row is created with the negated amount, `reverses_commission_id` set, and **negated `commission_sources`** so the source trail nets to zero. A reversal cannot itself be reversed, and a commission cannot be reversed twice. `DELETE` is refused by a database trigger: *"a commission is never deleted; reverse it with a contra entry."*
+
+**3. Every commission renders its full deduction breakdown from data.** Nothing is stored as prose:
+
+> `Commission MYR 38.50 — Recipient: Ali (marketer) · Rule: "Facebook Campaign Margin" v1 (effective 2025-08-15) · 12% of MYR 320.80 · Sales MYR 1,000.00 − Cost MYR 520.00 − Shipping MYR 49.20 − Fees MYR 30.00 − Ads MYR 80.00 = MYR 320.80 · Order SO-00001 · Provisional — final at period close`
+
+**4. No provisional accrual can reach payable.** Enforced twice: the state machine refuses with a readable reason, and a database `CHECK (NOT (is_provisional AND status IN ('payable','paid')))` refuses the row even under `forceFill`.
+
+### All ten prior-art anti-patterns addressed
+
+| # | Anti-pattern (from §13.1) | How P6 answers it |
+|---|---|---|
+| CA-1 | Mutable rate, no effective dating | `commission_rule_versions` are immutable (DB trigger) and effective-dated; a rate change creates v2 and existing commissions keep v1 — tested |
+| CA-2 | Commission cannot name its rule | `rule_version_id`, `basis_amount`, `rate_type`, `rate_applied`, `calc_inputs` all persisted |
+| CA-3 | Aggregate rows with `order_id = NULL` | `commission_sources` links every commission to its contributing orders |
+| CA-4 | Inline in a retrying callback, no index | Accrual is a service call guarded by a `NULLS NOT DISTINCT` unique constraint |
+| CA-5 | Payout sweep never flips to paid | `paid` requires a payout; the state machine refuses otherwise |
+| CA-6 | No reversal path | First-class contra entries |
+| CA-7 | Hard delete to "correct" | `DELETE` refused by trigger |
+| CA-8 | Free-transition status setter | State machine with `reasonAgainst()` |
+| CA-9 | Config the engine never reads | The strategy CHECK lists only the four implemented strategies |
+| CA-10 | Payout not posted to the ledger | **Not yet closed — see below** |
+
+### A real PostgreSQL trap found
+
+**A `UNIQUE` index does not prevent duplicates when a participating column is NULL** — Postgres treats NULLs as distinct. The idempotency constraint silently allowed unlimited duplicate accruals for *order-level* commissions, which is exactly the case it existed to protect. Found only because a test inserted a deliberate duplicate and nothing threw. Fixed with `UNIQUE NULLS NOT DISTINCT` (PG 15+), then re-proven by removing the application check.
+
+### ADR-009 in practice
+
+Margin is `sales − cost − shipping − fees − allocated ad spend`, where sales is subtotal less discount plus shipping charged. Ad spend is apportioned from `campaign_costs` for `(campaign, period)` by the plan's allocation rule — the pro-rata split across two campaign orders is tested (MYR 100 → 50/50).
+
+The two-stage life works as designed: accrual is **provisional** while `costs_reconciled` is false, `finalise()` restates it against reconciled costs and records the before/after, and only then can it become payable.
+
+### The Q-18 assumption, stated explicitly
+
+**This engine is only as correct as `unit_cost`.** P4-4 remains open: there is no landed-cost allocation, so freight and duty are not apportioned into `unit_cost`. In the worked example a MYR 38.50 commission rests on a MYR 520.00 cost figure taken from the purchase order.
+
+**Assumption on record:** the client's `cost_price` and PO costs are accurate enough to pay commission on. If they are estimates, every commission this engine computes will be confidently wrong in the same direction. That is R-14, and it is now live rather than theoretical.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P6-1 | **CA-10 is not closed.** `commission_payouts` exists but payout does not post to a ledger, because Finance is P7. The hook belongs in `CommissionPayoutService`, which is not built |
+| P6-2 | **No payout run.** Payout, payout items and payout requests have schema and models; nothing sweeps approved commissions into a payout, snapshots bank details, or generates a voucher |
+| P6-3 | Accrual is a synchronous service call. §13.3 specifies a **queued job keyed on the order**; the unique constraint already makes that safe, but the job is not written |
+| P6-4 | Nothing triggers accrual automatically. An order reaching a qualifying state should enqueue it; today `accrueForOrder()` must be called explicitly |
+| P6-5 | No reversal is triggered by an order being refunded or returned — the mechanism exists, the event wiring does not |
+| P6-6 | Only four of the eight strategies are implemented; tier ladders, target achievement and upline override are deliberately absent from the CHECK rather than half-built |
+| P6-7 | No UI |

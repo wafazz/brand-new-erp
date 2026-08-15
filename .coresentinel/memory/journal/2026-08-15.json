@@ -71,6 +71,18 @@
         "approvals"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 15:52:42",
+      "entry": "P5 Attribution gate CLOSED. All twelve questions from the plan are answered by methods named after them, each tested: customer origin, order origin, lead generator, closer, revenue by campaign/marketer/salesperson/branch, channel conversion, ROAS, cost per lead, and team target attainment. ADR-008 behaviour proven: first touch wins for credit while every touch is retained, a converted customer inherits its lead first touch, and the order attribution is FROZEN because commission is paid on it. Unattributed is a valid first-class state, never defaulted to a convenient marketer. Caught a tenant-isolation hole before it shipped - DB::table() bypasses the Eloquent global scope, so all twelve reports would have summed revenue across every company; scoped explicitly with 16 filters and guarded by an architecture test. Honest note: three planted violations did NOT fail the leak test because the scoping is layered on both attributions and orders; only stripping the entire layer made it fail, which is redundant protection rather than a weak test but had to be verified rather than assumed. Also hit a real Postgres constraint - FOR UPDATE is not allowed with aggregate functions - so the touch sequencer locks the last row instead. 972 tests, 85 tables.",
+      "tags": [
+        "p5",
+        "erp",
+        "gate-closed",
+        "attribution",
+        "marketing"
+      ],
+      "agent": "Iris"
     }
   ]
 }

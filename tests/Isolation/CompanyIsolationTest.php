@@ -18,6 +18,15 @@ use App\Models\Campaign;
 use App\Models\CampaignCost;
 use App\Models\Category;
 use App\Models\Channel;
+use App\Models\Commission;
+use App\Models\CommissionEvent;
+use App\Models\CommissionPayout;
+use App\Models\CommissionPayoutItem;
+use App\Models\CommissionPlan;
+use App\Models\CommissionRequest;
+use App\Models\CommissionRule;
+use App\Models\CommissionRuleVersion;
+use App\Models\CommissionSource;
 use App\Models\Company;
 use App\Models\CompanyModuleSetting;
 use App\Models\CompanyUser;
@@ -232,6 +241,41 @@ function newLead(string $suffix): Lead
     ]);
 }
 
+function newCommissionPlan(string $suffix): CommissionPlan
+{
+    return CommissionPlan::create([
+        'code' => 'CPL-'.$suffix.'-'.str()->random(4),
+        'name' => 'Plan '.$suffix,
+        'strategy' => 'percentage_of_value',
+        'recipient_role' => 'marketer',
+    ]);
+}
+
+function newCommissionRule(string $suffix): CommissionRule
+{
+    return CommissionRule::create([
+        'commission_plan_id' => newCommissionPlan($suffix.'r')->getKey(),
+        'code' => 'CRL-'.$suffix.'-'.str()->random(4),
+        'name' => 'Rule '.$suffix,
+    ]);
+}
+
+function newCommission(string $suffix): Commission
+{
+    return Commission::create([
+        'order_id' => newOrder($suffix.'x')->getKey(),
+        'recipient_user_id' => newUser($suffix.'x')->getKey(),
+        'recipient_role' => 'marketer',
+        'commission_plan_id' => newCommissionPlan($suffix.'x')->getKey(),
+        'period' => '2026-08',
+        'basis_amount' => '1000',
+        'rate_type' => 'percent',
+        'rate_applied' => '5',
+        'amount' => '50',
+        'calc_inputs' => ['strategy' => 'percentage_of_value'],
+    ]);
+}
+
 function seedRowFor(string $class, Company $company): Model
 {
     return app(CompanyContext::class)->runAs($company->getKey(), function () use ($class): Model {
@@ -291,6 +335,59 @@ function seedRowFor(string $class, Company $company): Model
             DocumentSequence::class => ['key' => 'seq-'.$suffix, 'prefix' => 'SQ'],
             Order::class => ['order_number' => 'SO-'.$suffix, 'customer_name' => 'Walk-in '.$suffix],
             Territory::class => ['code' => 'TR-'.$suffix, 'name' => 'Territory '.$suffix],
+            CommissionPlan::class => [
+                'code' => 'CPL-'.$suffix,
+                'name' => 'Plan '.$suffix,
+                'strategy' => 'percentage_of_value',
+                'recipient_role' => 'marketer',
+            ],
+            CommissionRule::class => [
+                'commission_plan_id' => newCommissionPlan($suffix)->getKey(),
+                'code' => 'CRL-'.$suffix,
+                'name' => 'Rule '.$suffix,
+            ],
+            CommissionRuleVersion::class => [
+                'commission_rule_id' => newCommissionRule($suffix)->getKey(),
+                'version' => 1,
+                'rate_type' => 'percent',
+                'rate_value' => '5',
+                'valid_from' => now()->subYear(),
+            ],
+            Commission::class => [
+                'order_id' => newOrder($suffix.'cm')->getKey(),
+                'recipient_user_id' => newUser($suffix.'cm')->getKey(),
+                'recipient_role' => 'marketer',
+                'commission_plan_id' => newCommissionPlan($suffix.'cm')->getKey(),
+                'period' => '2026-08',
+                'basis_amount' => '1000',
+                'rate_type' => 'percent',
+                'rate_applied' => '5',
+                'amount' => '50',
+                'calc_inputs' => ['strategy' => 'percentage_of_value'],
+            ],
+            CommissionSource::class => [
+                'commission_id' => newCommission($suffix)->getKey(),
+                'order_id' => newOrder($suffix.'cs')->getKey(),
+                'contribution' => '1000',
+            ],
+            CommissionEvent::class => [
+                'commission_id' => newCommission($suffix.'ce')->getKey(),
+                'event' => 'created',
+                'summary' => 'Accrued for the isolation suite.',
+            ],
+            CommissionPayout::class => ['reference' => 'CPO-'.$suffix, 'period' => '2026-08'],
+            CommissionPayoutItem::class => [
+                'commission_payout_id' => CommissionPayout::create(['reference' => 'CPO2-'.$suffix, 'period' => '2026-08'])->getKey(),
+                'commission_id' => newCommission($suffix.'pi')->getKey(),
+                'amount' => '50',
+            ],
+            CommissionRequest::class => [
+                'recipient_user_id' => newUser($suffix.'cr')->getKey(),
+                'bank_name' => 'Maybank',
+                'bank_account' => '1234567890',
+                'bank_holder' => 'Ali',
+                'amount' => '50',
+            ],
             SalesTeam::class => ['code' => 'ST-'.$suffix, 'name' => 'Team '.$suffix],
             SalesTeamMember::class => [
                 'sales_team_id' => newSalesTeam($suffix)->getKey(),

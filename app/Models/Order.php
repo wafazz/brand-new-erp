@@ -12,6 +12,7 @@ use App\Models\Concerns\AppliesDataScope;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
 use App\Support\Money;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -23,6 +24,8 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property ExceptionStatus $exception_status
  * @property string $currency
  * @property bool $is_cod
+ * @property ?CarbonImmutable $placed_at
+ * @property bool $costs_reconciled
  */
 class Order extends Model implements Scopeable
 {
