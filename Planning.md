@@ -3,8 +3,13 @@
 **Status:** PLANNING ONLY — NOT APPROVED FOR EXECUTION
 **Author:** Iris (CoreSentinel-governed)
 **Date:** 2026-08-15
-**Doc version:** 1.0
-**Approval required from:** Fakrul
+**Doc version:** 1.1 — all 13 open questions resolved by Fakrul, plus 2 new questions raised and resolved
+**Approval required from:** Fakrul — **execution still NOT approved**
+
+> **v1.1 changes:** §43 open questions are resolved and recorded as ADR-005…ADR-010 in the
+> project decision ledger. Scope reduced (no SaaS shell, §35). Commission basis and its
+> provisional/final consequence added (§13.4). Attribution tie-break fixed to first-touch
+> (§14.4). Stack selected (§36). Phases re-cut (§44). Two new risks (R-14, R-15).
 
 > Nothing in this document has been implemented. No migration, model, controller, service,
 > component or package has been created. The only files written are `Planning.md` and
@@ -442,6 +447,50 @@ CA-7). If already paid, it becomes a recoverable balance against the next payout
 **States:** `pending → approved → payable → paid`, plus `cancelled` and `reversed`. Enforced
 by a state machine with a transition log (fixes CA-8).
 
+### 13.4 Commission basis — DECIDED (ADR-009)
+
+**Default strategy: `PercentageOfMargin`, where margin is *full* contribution margin:**
+
+```
+margin = sales − product cost − shipping/postage − payment fees − allocated ad spend
+```
+
+This is the truest-profit basis (the DZI model). It was chosen deliberately over simpler
+bases, and it carries **three consequences that are now mandatory design, not options**:
+
+**(a) Commission has a two-stage life.** Shipping is not known until the parcel ships, payment
+fees are not known until settlement, and ad spend is attributed per campaign and period rather
+than per order. Therefore a commission **accrues provisionally on estimates** and is
+**restated at period close against reconciled actuals**.
+
+- The restatement is an **audited adjustment entry**, never a silent re-run — DZI's silent
+  re-run is exactly what makes its figures unauditable.
+- `commissions.is_provisional` plus a `finalised_at` timestamp. A provisional commission may
+  reach `approved` but **never `payable`**.
+- DZI's `Order::effective*()` idiom (use reconciled actuals when present, else estimates) is
+  adopted for the basis computation. It exists in that codebase precisely because this problem
+  is real.
+
+**(b) Ad spend needs an allocation rule.** Ad spend lands on `(campaign, period)`, commission
+lands on an order. The allocation rule is a **plan setting**, not a hard-coded formula:
+`pro_rata_by_order_value` (default) · `equal_per_order` · `pro_rata_by_margin` ·
+`excluded` (ignore ad spend for this plan). Orders in a period with zero attributed campaign
+spend simply carry a zero ad component.
+
+**(c) Marketers see their own ad spend reduce their pay.** This is a business consequence, not
+a technical one, but it must be surfaced in the UI or it will be discovered as a dispute. The
+commission explanation (§13.3) therefore itemises **every deduction**:
+
+> **Commission RM38.50** — Recipient: Ali (Marketer) · Rule: "FB Campaign Margin" v3
+> (effective 2026-07-01) · **12% of margin RM320.80**
+> Sales RM1,000.00 − Cost RM520.00 − Shipping RM49.20 − Fees RM30.00 − Ads RM80.00
+> · Order #10025 · **Provisional** — final at period close
+
+**Cost accuracy is now a payroll problem.** Margin-based commission means a wrong landed cost
+produces a wrong payment. Purchasing/landed-cost (P4) must therefore be correct **before**
+Commission (P6) goes live — the phase order already satisfies this, but it is now a hard
+dependency rather than a convenience. See R-14.
+
 ---
 
 ## 14. Attribution Model
@@ -481,6 +530,27 @@ generated revenue? 7. Which salesperson generated revenue? 8. Which channel conv
 
 Each is a named, tested reporting query. **A dimension that cannot answer one of these is not
 built in v1.**
+
+### 14.4 Tie-break — DECIDED (ADR-008)
+
+**First touch wins.** When two or more marketers touch the same lead before it converts,
+commission credit goes to the marketer who **originally generated the lead**.
+
+Rationale: it rewards lead generation, and it protects a marketer whose lead takes weeks to
+convert from having the credit taken by whoever happened to touch it last. This is the fair
+model for the social-commerce profile, where lead generation is the scarce work.
+
+Implementation consequences:
+
+- **Every touch is still recorded** in `attribution_touches`. First-touch is the *credit* rule,
+  not a reason to discard data — last-touch and multi-touch reporting remain available, and
+  changing the credit rule later is a rule change, not a migration.
+- `attributions.touch_type` distinguishes `first` from `last`; commission joins on `first`.
+- The first touch is **immutable once an order exists against the lead**. Re-attributing a lead
+  after money has been paid on it is forbidden by the same logic that freezes the order snapshot.
+- **Edge case that must be tested:** a lead with no recorded first touch (walk-in, manual entry,
+  direct marketplace order). Credit is *unattributed*, not defaulted to whoever is convenient.
+  A null marketer is a valid, first-class state.
 
 ---
 
@@ -885,10 +955,20 @@ projects. Pages at `resources/js/Pages/{Area}/{Resource}/{Action}.tsx`.
 Dual guards: `web` → `User`, `platform` → `PlatformUser` in a separate table with its own
 sessions and password resets.
 
-This is **not optional**. SMEOS conflict C-01 records that three of its lanes designed a
-`users.is_platform_owner` flag and its security lead vetoed it as *extinction-level* (THR-005):
-one boolean on a shared table is one mass-assignment bug away from total compromise. An
-architecture test asserts the column's **absence**. Adopt both the design and the test.
+**Revised for ADR-005 (client project, no SaaS shell):** with no platform tier, there is no
+platform operator to separate from tenant users, so the second guard has nothing to guard.
+**v1 ships a single `web` guard.**
+
+What is **kept regardless**, because it is the part that actually mattered: **no privilege
+boolean on `users`.** SMEOS conflict C-01 records that three of its lanes designed a
+`users.is_platform_owner` flag and its security lead vetoed it as *extinction-level* (THR-005)
+— one boolean on a shared table is one mass-assignment bug away from total compromise. The
+architecture test asserting the **absence** of `is_platform_owner`, `is_super_admin`,
+`is_admin` is adopted as-is. Elevated access comes from a role, which goes through the scope
+resolver, and is therefore audited.
+
+If the client later resells the system, the second guard is added then — and because no
+privilege boolean exists, that addition is additive rather than a security rewrite.
 
 Plus: bcrypt/argon2, login rate limiting, session regeneration, 2FA mandatory for platform
 users, single-use time-limited reset tokens, `httpOnly`/`secure`/`sameSite` cookies.
@@ -1066,10 +1146,29 @@ handles badly.
 genuinely company-wide. Branch is a **scope dimension** (§17), a stock location (§12) and an
 approval routing dimension (§19).
 
-**SaaS:** `Company → Branch → Department → User`. Package/module/feature entitlement chain
-adopted from SMEOS (verified working: a platform owner creates a package, attaches modules,
-and it appears in tenant nav with **zero code changes**). Not built in v1 beyond the module
-registry; the tables are shaped so subscription billing is additive later.
+**SaaS — DECIDED: NOT BUILT (ADR-005).** This is client delivery for one SME with several
+branches. The following are **explicitly out of scope**: `packages`, `package_modules`,
+`features`, `subscriptions`, the platform-owner console, and any billing or plan-gating layer.
+
+What is still built, and why:
+
+| Kept | Reason |
+|---|---|
+| `company_id` + global scope on every business table | Cheap now, expensive to retrofit. One company row exists; the mechanism costs almost nothing |
+| Module registry + per-company enable/disable | The brief requires modules to be enable-able. Registry stays; **`min_plan` gating is dropped** |
+| Branch, Department, User hierarchy | Kernel — it feeds data scope |
+
+**Dropped from §23:** `packages`, `package_modules`, `features`, `subscriptions` — 4 tables.
+**Dropped from §4:** `min_plan` on the module registry.
+
+**Consequence worth stating plainly: data scope is now the primary authorization axis.** With
+one company, company isolation protects nothing on its own — every user is in the same company.
+What actually stands between a salesperson and another salesperson's orders is §17. This raises
+the stakes on the scope layer and lowers them on tenant isolation, which is the reverse of
+SMEOS's situation.
+
+**Handoff applies.** Client work triggers `52-handoff-protocol.md` at ship: documentation,
+credentials transfer, and a deployment runbook the client can execute without the developer.
 
 **Deliberately not over-engineered:** no database-per-tenant, no schema-per-tenant, no row-level
 security. AgentStockit uses `stancl/tenancy` DB-per-tenant and it is genuinely cleaner for
@@ -1159,7 +1258,12 @@ problem SMEOS warns about.
 
 ---
 
-### Recommendation
+### SELECTED: Option 1 (ADR-006)
+
+Chosen by Fakrul 2026-08-15. Q-2 (PostgreSQL 16) and Q-3 (`NUMERIC(15,4)` + Money VO) are
+resolved by this choice. Recorded as ADR-006 in the project ledger.
+
+### Recommendation *(as argued at the time of the decision)*
 
 **Option 1**, with the OMS order/inventory patterns ported in. Reasoning: this ERP's hardest
 problem is not order throughput and not CRUD volume — it is **authorization correctness across
@@ -1291,7 +1395,9 @@ will migrate over the dev database).
 | R-10 | Solo support burden | High | Named by OMS as its highest real-world risk. Ten SME tenants is a part-time support job |
 | R-11 | PDPA vs append-only audit | Medium | Field-name-only audit payloads; erasure path designed now |
 | R-12 | Estimating from SMEOS/OMS velocity | Medium | Both are narrower products (C-7) |
-| R-13 | Two frontend paradigms (Option 3 only) | Medium | Avoided by Option 1 |
+| R-13 | Two frontend paradigms (Option 3 only) | Medium | **Retired** — Option 1 selected (ADR-006) |
+| **R-14** | **Wrong landed cost produces wrong commission.** ADR-009 makes commission a function of margin, so a costing error is a payment error, and marketers will dispute it | **High** | Landed cost correct and tested in P4 before Commission ships in P6; cost snapshotted onto the order line at sale; a costing-change report showing which commissions a cost correction would move |
+| **R-15** | **Provisional commission never gets finalised.** Accruals sit provisional forever because nobody closes the period, and marketers are paid on estimates | **High** | A provisional commission can reach `approved` but **never `payable`**; a period-close job is scheduled, not manual; an ageing alert fires on provisional accruals older than one closed period |
 
 ---
 
@@ -1316,29 +1422,58 @@ Written to the shared failures layer (transferable across projects):
 12. Commission calculated inline in a gateway callback with no idempotency
 13. No reversal/clawback path in any prior commission system
 
-**Not yet written, pending approval:** the 12 new ADRs (N-1…N-12). Recording an ADR asserts a
-decision has been made; these are proposals. On approval they go to
-`coresentinel decision add`.
+**Written after Fakrul resolved §43 (2026-08-15)** — six ADRs now in the project ledger at
+`.coresentinel/memory/decisions.json`:
+
+| ADR | Decision |
+|---|---|
+| ADR-005 | Client project, single company multi-branch, no SaaS shell |
+| ADR-006 | Stack: Laravel 12 + PostgreSQL 16 + Inertia/React 19/TS/Bootstrap 5 |
+| ADR-007 | Authorization is `Permission × DataScope` from commit one |
+| ADR-008 | Attribution is its own polymorphic domain; first-touch wins |
+| ADR-009 | Commission pays a percentage of full gross margin |
+| ADR-010 | Commission rules immutable and effective-dated |
+
+The remaining proposals (N-7 three-axis order status, N-11 component library in P0, N-12
+partial fulfilment, and the rest) are **still proposals** and are not in the ledger — they were
+not individually put to Fakrul, and recording an unasked decision as decided is the failure
+`55-self-evolution.md` separates *approve* from *apply* to prevent.
+
+**Governance actions taken:** EVO-003 approved (apply refused — stale, see Q-13);
+EVO-004 filed for CoreSentinel Standing Rule 7, `PENDING_REVIEW`.
 
 ---
 
-## 43. Open Questions — your decision required
+## 43. Open Questions — RESOLVED 2026-08-15
 
-| # | Question | Options | My recommendation |
+All 13 resolved by Fakrul, plus 2 new questions raised during resolution and also resolved.
+
+| # | Question | **Decision** | Recorded |
 |---|---|---|---|
-| **Q-1** | **Tech stack** | Option 1 / 2 / 3 (§36) | **Option 1** |
-| **Q-2** | **Database engine** (C-1) | PostgreSQL 16 / MariaDB 11.8 | **PostgreSQL 16** |
-| **Q-3** | **Money representation** (C-2) | `NUMERIC(15,4)` + VO / integer cents | **`NUMERIC(15,4)` + VO** |
-| **Q-4** | **Primary target profile** (§3) | P-A social-commerce / P-B distributor / P-C multi-branch / P-D agent network | **P-A first**, it justifies the differentiator; P-C forces branch which we build anyway |
-| **Q-5** | **Client work, own SaaS, or internal?** | — | **Still unanswered from Phase 0.** Changes multi-company, billing and handoff defaults |
-| **Q-6** | **Attribution tie-break rule** | First-touch wins / last-touch wins / split by rule | Decide before P5. R-06 |
-| **Q-7** | **Default commission strategy** | Percentage-of-value / percentage-of-margin / margin-as-ladder | Depends on Q-4 |
-| **Q-8** | **Approval delegation in v1?** | Yes / defer | **Defer** — adds a permissions dimension |
-| **Q-9** | **Multi-currency in v1?** | Yes / MYR only | **MYR only**, schema carries `currency` |
-| **Q-10** | **SaaS billing in v1?** | Yes / registry only | **Registry only** |
-| **Q-11** | **`git init` the project?** | — | Yes — unblocks 4 of 6 evidence checks |
-| **Q-12** | **CoreSentinel Rule 7 (Windows)** (C-9) | Waive / CSE proposal | **CSE proposal** to make it platform-conditional |
-| **Q-13** | **EVO-003** pending your review | Approve / reject | Your call |
+| **Q-1** | Tech stack | **Option 1 — SMEOS lineage** | ADR-006 |
+| **Q-2** | Database engine (C-1) | **PostgreSQL 16** | ADR-006 |
+| **Q-3** | Money representation (C-2) | **`NUMERIC(15,4)` + bcmath Money VO** | ADR-006 |
+| **Q-4** | Primary target profile | **P-A social-commerce trader** | §3 |
+| **Q-5** | Work mode | **Client project** — handoff protocol applies | ADR-005 |
+| **Q-6** | Attribution tie-break | **First touch wins** | ADR-008, §14.4 |
+| **Q-7** | Default commission strategy | **Percentage of gross margin** | ADR-009, §13.4 |
+| **Q-8** | Approval delegation in v1 | **Defer to v1.1** | §19 |
+| **Q-9** | Multi-currency in v1 | **MYR only**; `currency` column retained | §24 |
+| **Q-10** | SaaS billing in v1 | **Not built** — superseded by Q-14 | ADR-005, §35 |
+| **Q-11** | `git init` | **Done** — repo initialised, planning committed `e30910b` | — |
+| **Q-12** | CoreSentinel Rule 7 (C-9) | **CSE proposal filed → EVO-004, `PENDING_REVIEW`** | EVO-004 |
+| **Q-13** | EVO-003 | **Approved.** Apply refused — target is a governance doc outside the safe-change set. **Proposal is stale**: `04-memory-ecosystem-protocol.md` already documents all six lifecycle operations. Nothing to apply | — |
+| **Q-14** *(new)* | Deployment shape, given client work | **One client, multi-branch. No SaaS shell** | ADR-005, §35 |
+| **Q-15** *(new)* | What "gross margin" deducts | **Full: − cost − shipping − fees − ad spend** | ADR-009, §13.4 |
+
+### Still genuinely open (raised by the answers, not blocking P0–P2)
+
+| # | Question | Needed by |
+|---|---|---|
+| **Q-16** | Ad-spend allocation rule default — `pro_rata_by_order_value`, `equal_per_order`, `pro_rata_by_margin` or `excluded` (§13.4b) | Before P6 |
+| **Q-17** | Who closes a commission period, and on what schedule? R-15 depends on this being a scheduled job with a named owner, not a manual habit | Before P6 |
+| **Q-18** | Does the client have real landed-cost data today, or is `unit_cost` currently a guess? ADR-009 makes this a payroll input (R-14) | Before P4 |
+| **Q-19** | Payment gateway(s) and courier(s) in scope — affects fee capture (§13.4a) and shipping cost timing | Before P3 |
 
 ---
 
@@ -1349,13 +1484,13 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 
 | Phase | Name | Contents | Exit gate |
 |---|---|---|---|
-| **P0** | Foundation | Laravel + PG + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, dual auth guards, **component library**, module registry | Isolation suite green for every scoped model; CI guards fail on a planted violation |
+| **P0** | Foundation | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | Isolation suite green for every scoped model; CI guards fail on a planted violation |
 | **P1** | Access | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log | **All 16 isolation assertions green.** A salesperson cannot reach another's record via route, export, report or API — proven by test |
 | **P2** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
 | **P3** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
 | **P4** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
 | **P5** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
-| **P6** | Commission | Plans, immutable versioned rules, strategies, queued calculation, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its explanation from data |
+| **P6** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
 | **P7** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
 | **P8** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
 | **P9** | Hardening & Launch | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy | External security review clean; restore rehearsed and documented |
