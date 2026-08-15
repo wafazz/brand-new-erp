@@ -125,9 +125,16 @@ class Order extends Model implements Scopeable
 
     public function outstanding(): Money
     {
-        return Money::of((string) $this->total, $this->currency)
-            ->minus(Money::of((string) $this->returned_amount, $this->currency))
-            ->minus(Money::of((string) $this->paid_amount, $this->currency));
+        $owing = $this->keptTotal()->minus(Money::of((string) $this->paid_amount, $this->currency));
+
+        return $owing->isNegative() ? Money::zero($this->currency) : $owing;
+    }
+
+    public function refundDue(): Money
+    {
+        $owed = Money::of((string) $this->paid_amount, $this->currency)->minus($this->keptTotal());
+
+        return $owed->isNegative() ? Money::zero($this->currency) : $owed;
     }
 
     public function keptTotal(): Money

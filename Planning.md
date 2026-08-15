@@ -3410,6 +3410,71 @@ exemption, the order-screen take-back, and its idempotence.
 |---|---|
 | Y-1 | The refund limit is per register and set in the database — **there is no screen for it**. A shop cannot change its own limit without a developer |
 | Y-2 | A supervisor still has no limit at all. There is no daily refund total, no report of who refunded what |
-| Y-3 | An order-screen return puts stock back but **refunds no money** — correct while credit notes do not exist, but it leaves the customer owed |
+| Y-3 ✔ | ~~An order-screen return refunds no money~~ **CLOSED** — see Appendix Z. The debt is now derived, shown and payable |
 | Y-4 | Still open: no exchange flow (W-4), no cross-branch returns (W-2), no held sales (V-3) |
 | Y-5 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix Z — Money owed back is now a number the system holds (2026-08-15)
+
+Y-3: a return recorded away from the till put goods back on the shelf and refunded nothing. The
+shop owed the customer and no part of the system said so.
+
+### An order can owe, or be owed, never both
+
+`Order::outstanding()` was `total − returned − paid`, which went **negative** once goods came back
+without a refund. A negative outstanding is not a smaller debt; it is the opposite relationship, and
+reading it as a debt is how a shop chases a customer it actually owes.
+
+Split into two figures that cannot both be non-zero:
+
+```
+keptTotal   = total − returned_amount        what the customer is keeping
+outstanding = max(0, keptTotal − paid)       what they still owe us
+refundDue   = max(0, paid − keptTotal)       what we owe them
+```
+
+The order screen shows one or the other, labelled, and offers **Refund** when money is owed back.
+`OrderService::refund()` writes the negative payment, refusing anything above what the returned
+goods are worth, and moves the status to `Refunded` **before** the money leaves — the same ordering
+the till already needed, for the same reason.
+
+### D-18: a test that accepted the wrong refusal
+
+Planting the removal of *"you cannot refund more than is owed"* did not fail the test. The refund of
+250 against 100 still errored — because `paid_amount` went negative and the **database** CHECK
+constraint from P3 rejected it.
+
+The test asserted `assertSessionHas('error')`. Any error satisfied that, including one from a
+completely different layer. It now asserts the message contains *"is owed"*, and the plant fails.
+
+This is the fifth time in this project a test has passed for a reason other than the one it names,
+and the second time the answer came from a database constraint. The correction generalises:
+**asserting that something failed is not the same as asserting why.**
+
+### A second thing the plant pass found
+
+`takeBack()` returned early when no warehouse could be resolved, so an order with no warehouse
+recorded **nothing** — not the returned quantities, not the money owed. Whether stock can be placed
+somewhere is a separate question from whether goods came back. Recording the return now always
+happens; moving stock happens only if there is somewhere to move it to.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,587 passed / 3,208 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| Z-1 | A refund away from the till is **not restricted the way a till refund is** — no session rule, no register limit, only `payments.create` and the order's data scope |
+| Z-2 | There is still no credit note. The refund is a negative payment on the original order, which is honest but leaves no document to hand a customer |
+| Z-3 | Nothing reports orders with money owed back. Finding them means opening orders one at a time |
+| Z-4 | Still open: no exchange flow (W-4), no cross-branch returns (W-2), no held sales (V-3), no screen for the register refund limit (Y-1) |
+| Z-5 | Still true: **no screen has been used by a human** |

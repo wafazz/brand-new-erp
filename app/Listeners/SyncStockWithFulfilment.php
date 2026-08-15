@@ -88,11 +88,6 @@ class SyncStockWithFulfilment
     private function takeBack(Order $order, OrderStatusChanged $event): void
     {
         $warehouse = $this->warehouseFor($order);
-
-        if ($warehouse === null) {
-            return;
-        }
-
         $returned = Money::of((string) $order->returned_amount, $order->currency);
 
         foreach ($order->items()->get() as $item) {
@@ -102,7 +97,7 @@ class SyncStockWithFulfilment
                 continue;
             }
 
-            if ($item->product_variant_id !== null) {
+            if ($item->product_variant_id !== null && $warehouse !== null) {
                 $stock = $this->inventory->lineFor($item->product_variant_id, $warehouse);
 
                 $this->inventory->receive(

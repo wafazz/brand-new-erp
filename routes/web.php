@@ -84,6 +84,7 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::get('/orders/{order}', [OrderController::class, 'show'])->name('orders.show');
     Route::post('/orders/{order}/transition', [OrderController::class, 'transition'])->name('orders.transition');
     Route::post('/orders/{order}/payments', [OrderController::class, 'recordPayment'])->name('orders.payments.store');
+    Route::post('/orders/{order}/refunds', [OrderController::class, 'refund'])->name('orders.refunds.store');
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'issue'])->name('orders.invoice.store');
 
     Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');

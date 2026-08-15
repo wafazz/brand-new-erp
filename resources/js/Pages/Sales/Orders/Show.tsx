@@ -67,6 +67,8 @@ interface Props {
         total: string
         paid_amount: string
         outstanding: string
+        returned_amount: string
+        refund_due: string
         notes: string | null
         payment_label: string
         payment_tone: Tone
@@ -104,9 +106,11 @@ interface Props {
 
 export default function OrderShow({ order, items, attribution, timeline, commissions, invoice, locks, transitions, permissions }: Props) {
     const [payingOpen, setPayingOpen] = useState(false)
+    const [refundOpen, setRefundOpen] = useState(false)
 
     const transitionForm = useForm({ axis: 'fulfilment', status: '', reason: '' })
     const paymentForm = useForm({ amount: order.outstanding, method: 'cash', reference: '' })
+    const refundForm = useForm({ amount: order.refund_due, method: 'bank_transfer', reference: '' })
 
     const move = (axis: 'payment' | 'fulfilment' | 'exception', status: string) => {
         transitionForm.transform(() => ({ axis, status, reason: '' }))
@@ -176,6 +180,11 @@ export default function OrderShow({ order, items, attribution, timeline, commiss
                         {permissions.record_payment && Number(order.outstanding) > 0 ? (
                             <button type="button" className="btn btn-sm btn-primary" onClick={() => setPayingOpen((open) => !open)}>
                                 Record payment
+                            </button>
+                        ) : null}
+                        {permissions.record_payment && Number(order.refund_due) > 0 ? (
+                            <button type="button" className="btn btn-sm btn-warning" onClick={() => setRefundOpen((open) => !open)}>
+                                Refund {order.currency} {Number(order.refund_due).toFixed(2)}
                             </button>
                         ) : null}
                     </>
@@ -249,6 +258,77 @@ export default function OrderShow({ order, items, attribution, timeline, commiss
                 </div>
             ) : null}
 
+            {Number(order.refund_due) > 0 ? (
+                <div className="alert alert-warning">
+                    <strong>This order owes the customer <MoneyText amount={order.refund_due} currency={order.currency} />.</strong>{' '}
+                    Goods worth <MoneyText amount={order.returned_amount} currency={order.currency} muted /> came back but the money has not
+                    gone out yet.
+                </div>
+            ) : null}
+
+            {refundOpen ? (
+                <div className="card mb-3 border-warning">
+                    <div className="card-header bg-body"><h2 className="h6 mb-0">Refund the customer</h2></div>
+                    <div className="card-body">
+                        <form
+                            className="row g-2 align-items-end"
+                            onSubmit={(event) => {
+                                event.preventDefault()
+                                refundForm.post(`/orders/${order.id}/refunds`, {
+                                    preserveScroll: true,
+                                    onSuccess: () => setRefundOpen(false),
+                                })
+                            }}
+                        >
+                            <div className="col-6 col-md-3">
+                                <label className="form-label" htmlFor="refund_amount">Amount</label>
+                                <input
+                                    id="refund_amount"
+                                    className={`form-control text-end font-monospace ${refundForm.errors.amount ? 'is-invalid' : ''}`}
+                                    inputMode="decimal"
+                                    value={refundForm.data.amount}
+                                    onChange={(e) => refundForm.setData('amount', e.target.value)}
+                                />
+                                {refundForm.errors.amount ? <div className="invalid-feedback d-block">{refundForm.errors.amount}</div> : null}
+                            </div>
+                            <div className="col-6 col-md-3">
+                                <label className="form-label" htmlFor="refund_method">Method</label>
+                                <select
+                                    id="refund_method"
+                                    className="form-select"
+                                    value={refundForm.data.method}
+                                    onChange={(e) => refundForm.setData('method', e.target.value)}
+                                >
+                                    {['bank_transfer', 'cash', 'card', 'ewallet', 'cheque'].map((method) => (
+                                        <option key={method} value={method}>{method.replace('_', ' ')}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="col-12 col-md-4">
+                                <label className="form-label" htmlFor="refund_reference">Reference</label>
+                                <input
+                                    id="refund_reference"
+                                    className="form-control"
+                                    value={refundForm.data.reference}
+                                    onChange={(e) => refundForm.setData('reference', e.target.value)}
+                                />
+                            </div>
+                            <div className="col-12 col-md-2 d-grid">
+                                <button type="submit" className="btn btn-warning" disabled={refundForm.processing}>
+                                    {refundForm.processing ? 'Saving…' : 'Refund'}
+                                </button>
+                            </div>
+                            <div className="col-12">
+                                <p className="form-text mb-0">
+                                    You can only refund what the returned goods are worth. Record the goods coming back first —
+                                    the server refuses anything beyond that.
+                                </p>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            ) : null}
+
             <div className="row g-3">
                 <div className="col-12 col-xl-8">
                     <div className="card mb-3">
@@ -270,8 +350,19 @@ export default function OrderShow({ order, items, attribution, timeline, commiss
                                 <dd className="col-4 col-sm-3 text-end fw-semibold mb-1"><MoneyText amount={order.total} currency={order.currency} /></dd>
                                 <dt className="col-8 col-sm-9 text-end fw-normal text-body-secondary">Paid</dt>
                                 <dd className="col-4 col-sm-3 text-end mb-1"><MoneyText amount={order.paid_amount} currency={order.currency} muted /></dd>
-                                <dt className="col-8 col-sm-9 text-end">Outstanding</dt>
-                                <dd className="col-4 col-sm-3 text-end fw-semibold mb-0"><MoneyText amount={order.outstanding} currency={order.currency} /></dd>
+                                {Number(order.returned_amount) > 0 ? (
+                                    <>
+                                        <dt className="col-8 col-sm-9 text-end fw-normal text-body-secondary">Returned</dt>
+                                        <dd className="col-4 col-sm-3 text-end mb-1"><MoneyText amount={order.returned_amount} currency={order.currency} muted /></dd>
+                                    </>
+                                ) : null}
+                                <dt className="col-8 col-sm-9 text-end">{Number(order.refund_due) > 0 ? 'Owed to customer' : 'Outstanding'}</dt>
+                                <dd className="col-4 col-sm-3 text-end fw-semibold mb-0">
+                                    <MoneyText
+                                        amount={Number(order.refund_due) > 0 ? order.refund_due : order.outstanding}
+                                        currency={order.currency}
+                                    />
+                                </dd>
                             </dl>
                         </div>
                     </div>

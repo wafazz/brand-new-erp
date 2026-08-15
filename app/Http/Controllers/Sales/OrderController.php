@@ -119,6 +119,8 @@ class OrderController extends Controller
                 'total' => (string) $order->total,
                 'paid_amount' => (string) $order->paid_amount,
                 'outstanding' => $order->outstanding()->toDecimal(),
+                'returned_amount' => (string) $order->returned_amount,
+                'refund_due' => $order->refundDue()->toDecimal(),
                 'notes' => $order->notes,
                 'payment' => $order->payment_status->value,
                 'payment_label' => $order->payment_status->label(),
@@ -286,6 +288,25 @@ class OrderController extends Controller
         }
 
         return back()->with('success', 'Payment recorded.');
+    }
+
+    public function refund(Request $request, Order $order): RedirectResponse
+    {
+        $this->authorize('recordPayment', $order);
+
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'gt:0'],
+            'method' => ['required', Rule::in(['cash', 'card', 'bank_transfer', 'ewallet', 'cheque'])],
+            'reference' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        try {
+            $this->orders->refund($order, (string) $data['amount'], $data['method'], $data['reference'] ?? null, $request->user());
+        } catch (Throwable $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        return back()->with('success', 'Refund recorded.');
     }
 
     /** @return array<string, mixed>|null */

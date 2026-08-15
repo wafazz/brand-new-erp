@@ -2,8 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Domain\Orders\OrderStateMachine;
 use App\Enums\CompanyRole;
 use App\Enums\DataScope;
+use App\Enums\ExceptionStatus;
 use App\Enums\FulfilmentStatus;
 use App\Models\Company;
 use App\Models\Order;
@@ -308,5 +310,90 @@ it('lets a role holding orders.cancel cancel the same order', function (): void 
 
     $this->withCompany($f['company'], function () use ($order): void {
         expect($order->fresh()?->exception_status->value)->toBe('cancelled');
+    });
+});
+
+it('shows what a returned order owes the customer, and refuses more than that', function (): void {
+    $f = routeFixture();
+
+    grant($f['company'], CompanyRole::Owner, 'orders.view', DataScope::Company);
+    grant($f['company'], CompanyRole::Owner, 'orders.update', DataScope::Company);
+    grant($f['company'], CompanyRole::Owner, 'payments.create', DataScope::Company);
+
+    $order = screenOrderFor($f['company'], $f['owner'], 'SO-RETURN', '100');
+
+    $this->actingAs($f['owner'])
+        ->post("/orders/{$order->getKey()}/payments", ['amount' => '100', 'method' => 'cash'])
+        ->assertSessionMissing('error');
+
+    $this->actingAs($f['owner'])
+        ->get("/orders/{$order->getKey()}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.refund_due', '0.0000')
+            ->where('order.outstanding', '0.0000'));
+
+    $this->withCompany($f['company'], function () use ($f, $order): void {
+        foreach (['pending', 'approved', 'allocated', 'picked', 'packed', 'shipped'] as $step) {
+            app(OrderStateMachine::class)
+                ->transition($order->refresh(), FulfilmentStatus::from($step), $f['owner']);
+        }
+
+        app(OrderStateMachine::class)
+            ->transition($order->refresh(), ExceptionStatus::Returned, $f['owner'], 'Came back by post');
+    });
+
+    $this->actingAs($f['owner'])
+        ->get("/orders/{$order->getKey()}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('order.returned_amount', '100.0000')
+            ->where('order.refund_due', '100.0000')
+            ->where('order.outstanding', '0.0000', 'a returned order is not a debt owed to us'));
+
+    $this->actingAs($f['owner'])
+        ->post("/orders/{$order->getKey()}/refunds", ['amount' => '250', 'method' => 'bank_transfer'])
+        ->assertRedirect()
+        ->assertSessionHas('error', fn (string $message): bool => str_contains($message, 'is owed'));
+
+    $this->actingAs($f['owner'])
+        ->post("/orders/{$order->getKey()}/refunds", ['amount' => '100', 'method' => 'bank_transfer'])
+        ->assertRedirect()
+        ->assertSessionMissing('error');
+
+    $this->withCompany($f['company'], function () use ($order): void {
+        expect((string) $order->fresh()?->paid_amount)->toBe('0.0000')
+            ->and($order->fresh()?->payment_status->value)->toBe('refunded')
+            ->and($order->fresh()?->refundDue()->toDecimal())->toBe('0.0000');
+    });
+});
+
+it('refuses a refund from a role without payments.create', function (): void {
+    $f = routeFixture();
+
+    grant($f['company'], CompanyRole::Salesperson, 'orders.view', DataScope::Own);
+
+    $order = screenOrderFor($f['company'], $f['alice'], 'SO-NOREFUND', '100');
+
+    $this->actingAs($f['alice'])
+        ->post("/orders/{$order->getKey()}/refunds", ['amount' => '10', 'method' => 'cash'])
+        ->assertForbidden();
+});
+
+it('refuses to refund an order that owes nothing back', function (): void {
+    $f = routeFixture();
+
+    grant($f['company'], CompanyRole::Owner, 'orders.view', DataScope::Company);
+    grant($f['company'], CompanyRole::Owner, 'payments.create', DataScope::Company);
+
+    $order = screenOrderFor($f['company'], $f['owner'], 'SO-NODUE', '100');
+
+    $this->actingAs($f['owner'])->post("/orders/{$order->getKey()}/payments", ['amount' => '100', 'method' => 'cash']);
+
+    $this->actingAs($f['owner'])
+        ->post("/orders/{$order->getKey()}/refunds", ['amount' => '10', 'method' => 'cash'])
+        ->assertRedirect()
+        ->assertSessionHas('error');
+
+    $this->withCompany($f['company'], function () use ($order): void {
+        expect((string) $order->fresh()?->paid_amount)->toBe('100.0000');
     });
 });

@@ -131,6 +131,41 @@ class OrderService
         });
     }
 
+    public function refund(Order $order, string $amount, string $method, ?string $reference = null, ?User $actor = null): Payment
+    {
+        $money = Money::of($amount, $order->currency);
+
+        if ($money->isZero() || $money->isNegative()) {
+            throw new InvalidArgumentException('A refund must be a positive amount.');
+        }
+
+        $due = $order->refundDue();
+
+        if ($money->greaterThan($due)) {
+            throw new InvalidArgumentException(
+                "This order is owed {$due->format()} and {$money->format()} was offered. ".
+                'Record the goods coming back before refunding more than they are due.'
+            );
+        }
+
+        return DB::transaction(function () use ($order, $money, $method, $reference, $actor, $due): Payment {
+            $settlesEverything = $money->toDecimal() === $due->toDecimal()
+                && $order->keptTotal()->isZero();
+
+            if ($settlesEverything && $this->states->canTransition($order, PaymentStatus::Refunded)) {
+                $this->states->transition($order, PaymentStatus::Refunded, $actor, 'Refunded in full.');
+            }
+
+            return $this->recordPayment(
+                $order->refresh(),
+                $money->negated()->toDecimal(),
+                $method,
+                $reference,
+                $actor,
+            );
+        });
+    }
+
     public function recalculate(Order $order): Order
     {
         $currency = $order->currency;
