@@ -3035,10 +3035,49 @@ passing for the wrong reason was itself passing for the wrong reason.
 **The full suite now passes against a dropped and recreated database: 1,499 / 2,882.** Until today
 that had never been tried.
 
+### D-13: the backend suite needed a compiled frontend
+
+Third run. 62 tests failed with `Vite manifest not found at public/build/manifest.json`.
+
+Every test that renders an Inertia page needs a compiled frontend. The PHP job never compiles one —
+that is a separate job with no artifact sharing. Locally `public/build/` had existed since the first
+`npm run build`, so those 62 tests had always passed.
+
+Fixed with `$this->withoutVite()` in the base `TestCase`, which is the right answer regardless of
+CI: **the PHP suite tests PHP.** It asserts Inertia props and HTTP status, and has no business
+depending on a compiled bundle. The `Frontend` job still runs `tsc` and `npm run build`, so the
+build is covered where it belongs.
+
+Proven by moving `public/build` out of the way entirely and running the full suite: **1,499 passed
+with no compiled frontend present.**
+
+### The pattern, stated once
+
+Four CI runs, four defects, all the same shape:
+
+| | The runner lacked… |
+|---|---|
+| D-10 | a PostgreSQL role named after the developer |
+| D-11 | a PHP version the docs promised but the lock cannot install |
+| D-12 | database schema left behind by previous local runs |
+| D-13 | a `public/build` directory left behind by a previous `npm run build` |
+
+None was a logic error. Every one was **an undeclared dependency on the state of one machine**, and
+none was findable there, because the machine supplying the state was the machine running the test.
+
+`Planning.md` has claimed *"N passed"* since P0. Every one of those claims was conditional on
+accumulated local state that was never written down. The suite is now portable, and that is a
+different and stronger property than being green.
+
+Two of the three guards written during this work were themselves defective and caught by planting —
+one matched an import rather than an activation, and one used Pest's `toContain($needle, $message)`,
+which treats the message as a **second needle**. That last one is the exact trap recorded in the
+CoreSentinel failures layer during P0, encountered again from the opposite direction.
+
 ### Carried forward
 
 | ID | Item |
 |---|---|
-| U-1 | CI has run twice and failed twice, each time finding a real defect. **A green run is still outstanding** — P9-3 does not close until one exists |
+| U-1 | CI has run three times and failed three times, each finding a real defect. **A green run is still outstanding** — P9-3 does not close until one exists |
 | U-2 | PHP 8.3 is no longer supported. Dropping the Symfony 8 packages would restore it, if that ever matters to a deployment target |
 | U-3 | No coverage reporting, no static analysis of the frontend beyond `tsc`, and CI does not run the Concurrency suite's multi-process tests under load |

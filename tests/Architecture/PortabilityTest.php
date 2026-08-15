@@ -75,3 +75,12 @@ it('migrates its own database in any suite that does not get one', function (): 
         'They pass only where a previous run left the schema behind: '.implode(', ', $offenders)
     );
 });
+
+it('does not need a built frontend to test the backend', function (): void {
+    $base = (string) file_get_contents(base_path('tests/TestCase.php'));
+
+    expect(str_contains($base, 'withoutVite()'))->toBeTrue(
+        'The PHP suite renders Inertia pages, so without this it fails wherever public/build has not '.
+        'been produced - which is every machine except one that has already run npm run build.'
+    );
+});
