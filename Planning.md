@@ -3532,7 +3532,35 @@ exemption, and the data scope.
 
 | ID | Item |
 |---|---|
-| AA-1 | The **register refund limit still only applies at the till.** A supervisor refunding from the order screen has no ceiling at all |
+| AA-1 ✘ | ~~The register refund limit still only applies at the till~~ **WITHDRAWN — the item was wrong.** See the correction below. The order screen is stricter than the till, not looser |
 | AA-2 | `payments.refund` is not on the roles-and-reach screen as anything special — it reads like any other permission, though it is one of the few that moves money outward |
 | AA-3 | Still open: no credit note (Z-2), nothing lists orders owing money back (Z-3), no exchange flow (W-4), no cross-branch returns (W-2), no held sales (V-3), no screen for the register limit (Y-1) |
 | AA-4 | Still true: **no screen has been used by a human** |
+| AA-5 | **No ceiling on refunds for ordinary orders.** Distinct from the withdrawn AA-1: the register limit is a register concept and does not apply to non-POS sales, so anyone holding `payments.refund` can refund any order they can reach, up to what the returned goods are worth. Whether that needs a limit is a policy question, not a defect |
+
+### Correction: AA-1 was not a real gap
+
+Asked whether AA-1 needed fixing, I read the two paths instead of building the control, and the item
+does not survive the reading.
+
+| | Who is refused |
+|---|---|
+| **At the till** | a cashier above the register limit; `pos.manage` holders are exempt |
+| **On the order screen** | *every* non-`pos.manage` holder, for any order that came from a till |
+
+The people who can refund a counter sale from the order screen are exactly the people already
+unlimited at the till. There is no wider door — **the order screen is the narrower one.** A cashier
+refused by the register limit cannot use it at all.
+
+A test now pins that permanently: a salesperson granted `payments.refund` outright is refused by the
+register limit at the till *and* refused at the order screen, and it fails if the till-origin rule is
+removed.
+
+What the item was reaching for is real but different, and is recorded as AA-5: an ordinary,
+non-counter order has no refund ceiling for anyone holding the permission. That is a policy choice
+rather than a bypass, and imposing one without being asked would be inventing a requirement.
+
+**The lesson is about the carried-forward list itself.** Those entries are written at the end of a
+wave, from memory of the code just written, and are not tested. AA-1 was plausible, adjacent to a
+real hole I had just closed, and wrong. An item on that list is a claim, and claims in this project
+are supposed to be checked before they are acted on.

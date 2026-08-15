@@ -5,6 +5,7 @@ declare(strict_types=1);
 use App\Domain\Orders\OrderService;
 use App\Domain\Orders\OrderStateMachine;
 use App\Domain\Pos\PosService;
+use App\Domain\Pos\TillRefused;
 use App\Enums\CompanyRole;
 use App\Enums\DataScope;
 use App\Enums\ExceptionStatus;
@@ -13,6 +14,7 @@ use App\Models\Company;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Permission;
+use App\Models\PosSession;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\Role;
@@ -532,5 +534,49 @@ it('refuses a refund on an order outside the actor data scope', function (): voi
 
     $this->withCompany($f['company'], function () use ($bobs): void {
         expect((string) $bobs->fresh()?->paid_amount)->toBe('100.0000');
+    });
+});
+
+it('gives a cashier no larger door on the order screen than the register allows', function (): void {
+    $f = tillFixture('20', '25');
+
+    grant($f['company'], CompanyRole::Salesperson, 'orders.view', DataScope::Company);
+    grant($f['company'], CompanyRole::Salesperson, 'payments.refund', DataScope::Company);
+
+    $sale = $this->withCompany($f['company'], function () use ($f): Order {
+        $f['register']->forceFill(['refund_limit' => '10'])->save();
+
+        $session = app(PosService::class)->openSession($f['register']->refresh(), $f['alice'], '0');
+
+        return app(PosService::class)->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '4']],
+            [['method' => 'cash', 'amount' => '100']],
+            $f['alice'],
+        );
+    });
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($f['company']->getKey());
+
+        expect($f['alice']->can('payments.refund'))->toBeTrue('the fixture gives her the refund permission outright')
+            ->and($f['alice']->can('pos.manage'))->toBeFalse('but she does not supervise the till');
+
+        $session = PosSession::query()->firstOrFail();
+
+        expect(fn () => app(PosService::class)->refund($session, $sale->refresh(), 'All of it', $f['alice']))
+            ->toThrow(TillRefused::class, 'A supervisor has to take it');
+
+        app(OrderStateMachine::class)
+            ->transition($sale->refresh(), ExceptionStatus::Returned, $f['owner'], 'Brought back');
+    });
+
+    $this->actingAs($f['alice'])
+        ->post("/orders/{$sale->getKey()}/refunds", ['amount' => '100', 'method' => 'cash'])
+        ->assertForbidden();
+
+    $this->withCompany($f['company'], function () use ($sale): void {
+        expect((string) $sale->fresh()?->paid_amount)
+            ->toBe('100.0000', 'the order screen must not be the wider door the till refused');
     });
 });
