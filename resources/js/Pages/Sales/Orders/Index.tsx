@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import MoneyText from '@/Components/MoneyText'
@@ -105,7 +106,12 @@ export default function OrderIndex({ orders, filters, statusOptions }: Props) {
             <PageHeader
                 title="Orders"
                 subtitle="Payment, fulfilment and exception move on separate tracks — an order can be paid and still unshipped."
-                actions={can('orders.create') ? <Link href="/orders/create" className="btn btn-sm btn-primary">New order</Link> : null}
+                actions={
+                    <>
+                        <ExportButton exportKey="orders" ability="orders.export" />
+                        {can('orders.create') ? <Link href="/orders/create" className="btn btn-sm btn-primary">New order</Link> : null}
+                    </>
+                }
             />
 
             <div className="card">

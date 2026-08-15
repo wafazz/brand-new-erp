@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import MoneyText from '@/Components/MoneyText'
@@ -64,7 +65,11 @@ export default function InvoiceIndex({ invoices, filters, ageing }: Props) {
         <AppLayout>
             <Head title="Invoices" />
 
-            <PageHeader title="Invoices" subtitle="What has been billed, what has been collected, and what is late." />
+            <PageHeader
+                title="Invoices"
+                subtitle="What has been billed, what has been collected, and what is late."
+                actions={<ExportButton exportKey="invoices" ability="invoices.export" />}
+            />
 
             {ageing ? (
                 <div className="row g-3 mb-4">

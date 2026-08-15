@@ -174,7 +174,7 @@ touching it.
 | **Sales** | **Subscriptions** — recurring billing that raises its own invoices, and collects them online if you let it · **Point of sale** — till sessions, split tenders, printable receipts, refunds · **Pipeline board** with weighted forecast and follow-ups · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
 | **Catalogue** | Products with inline variants · Inventory with movement history and adjustments |
 | **Purchasing** | Purchase requests · Purchase orders · Goods receipts with landed cost · Supplier bills with three-way match · Approvals inbox |
-| **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates · **Online payment links** via Billplz (FPX and cards), settled automatically |
+| **Money** | CSV export of any list, scoped to exactly what you may see · Commission with period totals and full explanations · Commission plans, rules and versioned rates · **Online payment links** via Billplz (FPX and cards), settled automatically |
 | **Marketing** | Channels · Campaigns with ad spend · Marketers · Attribution reports |
 | **People** | Leave requests, balances and manager approval · Leave types |
 | **Administration** | People · Roles and reach · Branches · Audit log |
@@ -248,7 +248,7 @@ composer gate          # Pint + PHPStan + Pest
 ./vendor/bin/pest
 ```
 
-**1,751 tests, 3,637 assertions**, in six suites that each do a different job:
+**1,770 tests, 3,712 assertions**, in six suites that each do a different job:
 
 | Suite | What it protects |
 |---|---|
@@ -286,7 +286,7 @@ Stated plainly, because a README that only lists strengths is not useful.
 - **Not one real payment has been taken.** The Billplz integration is implemented from the published
   specification and every test fakes the HTTP layer. It has never been confirmed against a live
   sandbox callback.
-- **No exports.** Nothing leaves this system in any format — no CSV, no PDF, no trial balance.
+- No PDF or accounting-package exports — CSV only, and reports cannot be exported, only records.
 - **No credit notes.** A wrong invoice can only be voided.
 - No quotations, no delivery-order document, no stock count, no promo codes, no company admin screen.
 - No 2FA, no password reset by email, no mail transport of any kind.

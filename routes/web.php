@@ -10,6 +10,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Catalogue\ProductController;
 use App\Http\Controllers\Crm\PipelineController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\ExportController;
 use App\Http\Controllers\Finance\CommissionController;
 use App\Http\Controllers\Finance\CommissionPlanController;
 use App\Http\Controllers\Finance\InvoiceController;
@@ -101,6 +102,8 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::post('/orders/{order}/payments', [OrderController::class, 'recordPayment'])->name('orders.payments.store');
     Route::post('/orders/{order}/refunds', [OrderController::class, 'refund'])->name('orders.refunds.store');
     Route::post('/orders/{order}/invoice', [InvoiceController::class, 'issue'])->name('orders.invoice.store');
+
+    Route::get('/exports/{key}', [ExportController::class, 'download'])->name('exports.download');
 
     Route::get('/invoices', [InvoiceController::class, 'index'])->name('invoices.index');
     Route::get('/invoices/{invoice}', [InvoiceController::class, 'show'])->name('invoices.show');

@@ -1,6 +1,7 @@
 import { Head } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 
@@ -31,7 +32,11 @@ export default function AuditLogIndex({ entries }: Props) {
     return (
         <AppLayout>
             <Head title="Audit log" />
-            <PageHeader title="Audit log" subtitle="Only entries your role and data scope permit." />
+            <PageHeader
+                title="Audit log"
+                subtitle="Only entries your role and data scope permit."
+                actions={<ExportButton exportKey="audit" ability="audit.export" />}
+            />
             <div className="card">
                 <div className="card-body">
                     <DataTable

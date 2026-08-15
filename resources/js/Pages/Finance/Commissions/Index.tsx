@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import MoneyText from '@/Components/MoneyText'
@@ -90,6 +91,7 @@ export default function CommissionIndex({ commissions, filters, totals }: Props)
             <PageHeader
                 title="Commission"
                 subtitle="Every figure here can explain itself — open one to see the rule, the basis and the arithmetic."
+                actions={<ExportButton exportKey="commissions" ability="commissions.export" />}
             />
 
             <div className="row g-3 mb-4">

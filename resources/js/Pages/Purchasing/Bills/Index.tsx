@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import MoneyText from '@/Components/MoneyText'
@@ -69,6 +70,7 @@ export default function SupplierBillIndex({ bills, filters, statuses }: Props) {
             <PageHeader
                 title="Supplier bills"
                 subtitle="What the supplier says you owe — checked against the order and what actually arrived."
+                actions={<ExportButton exportKey="supplier-bills" ability="purchasing.export" />}
             />
 
             <div className="card">

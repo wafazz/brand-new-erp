@@ -24,9 +24,9 @@ and marketing attribution, for a Malaysian company operating across multiple bra
 | Authorization | `spatie/laravel-permission` in teams mode + a custom data-scope layer |
 | Routes | 112 total, 57 state-changing (1 unauthenticated, signature-verified) |
 | Roles | 11 | 
-| Permissions | 74 |
+| Permissions | 81 |
 | Data scopes | 5 (own, team, branch, company, all) |
-| Tests | 1,751 passing / 3,637 assertions |
+| Tests | 1,770 passing / 3,712 assertions |
 
 There is no public API and no file upload. Every route requires a session except `GET|POST /login`
 and **two Billplz payment routes, which are authenticated by HMAC signature rather than by a
@@ -113,6 +113,20 @@ that was a deliberate fix, and it is exactly the kind of decision that deserves 
 `DataScope::covers()`. Two attacks worth trying: widen a role you do not hold but which is held by
 someone who then grants it back to you; and whether `sales_manager` at `team` scope can reach
 `branch` through an intermediate role.
+
+### 3.5a Exports
+
+`GET /exports/{key}` streams any of ten record sets as CSV. It is a **second route to the same
+records**, and the one most likely to be forgotten when a scope changes.
+
+- Each export requires its own `<group>.export` ability, separate from `.view`
+- Scoped exports go through the same `ScopeResolver` as the list screen — confirm none has drifted
+- `supplier-bills`, `products` and `audit` are company-scoped only. **Check that is right**
+- Cells are prefixed against spreadsheet formula injection (`CsvWriter::neutralise`)
+- Every export writes an audit entry
+
+Worth attacking: whether any `scopeAbility` in `ExportRegistry` is weaker than the one its list
+screen uses, and whether the injection guard can be evaded through Unicode or leading whitespace.
 
 ### 3.5 Reports and aggregates
 

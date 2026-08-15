@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import Pagination from '@/Components/Pagination'
@@ -90,7 +91,12 @@ export default function StockIndex({ lines, filters, warehouses, can }: Props) {
             <PageHeader
                 title="Inventory"
                 subtitle="On hand minus reserved is what you can actually sell."
-                actions={can.adjust ? <Link href="/inventory/create" className="btn btn-sm btn-primary">Open a stock line</Link> : null}
+                actions={
+                    <>
+                        <ExportButton exportKey="inventory" ability="inventory.export" />
+                        {can.adjust ? <Link href="/inventory/create" className="btn btn-sm btn-primary">Open a stock line</Link> : null}
+                    </>
+                }
             />
 
             <div className="card">

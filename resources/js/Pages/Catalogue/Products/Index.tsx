@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import Pagination from '@/Components/Pagination'
@@ -65,7 +66,12 @@ export default function ProductIndex({ products, filters }: Props) {
             <PageHeader
                 title="Products"
                 subtitle="Everything you sell, and the variants stock is counted against."
-                actions={can('products.create') ? <Link href="/products/create" className="btn btn-sm btn-primary">New product</Link> : null}
+                actions={
+                    <>
+                        <ExportButton exportKey="products" ability="products.export" />
+                        {can('products.create') ? <Link href="/products/create" className="btn btn-sm btn-primary">New product</Link> : null}
+                    </>
+                }
             />
 
             <div className="card">

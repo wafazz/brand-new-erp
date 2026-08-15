@@ -1,6 +1,7 @@
 import { Head, Link, router } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import MoneyText from '@/Components/MoneyText'
@@ -70,7 +71,12 @@ export default function LeadIndex({ leads, filters, statuses }: Props) {
             <PageHeader
                 title="Leads"
                 subtitle="Where the business came from, before it became an order."
-                actions={can('leads.create') ? <Link href="/leads/create" className="btn btn-sm btn-primary">New lead</Link> : null}
+                actions={
+                    <>
+                        <ExportButton exportKey="leads" ability="leads.export" />
+                        {can('leads.create') ? <Link href="/leads/create" className="btn btn-sm btn-primary">New lead</Link> : null}
+                    </>
+                }
             />
 
             <div className="card">

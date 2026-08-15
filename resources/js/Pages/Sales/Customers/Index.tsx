@@ -1,6 +1,7 @@
 import { Head, Link } from '@inertiajs/react'
 import AppLayout from '@/Layouts/AppLayout'
 import PageHeader from '@/Components/PageHeader'
+import ExportButton from '@/Components/ExportButton'
 import DataTable, { type Column } from '@/Components/DataTable'
 import StatusBadge from '@/Components/StatusBadge'
 import Pagination from '@/Components/Pagination'
@@ -74,6 +75,7 @@ export default function CustomerIndex({ customers, filters }: Props) {
                 subtitle="Only the customers your role and data scope permit."
                 actions={
                     <>
+    <ExportButton exportKey="customers" ability="customers.export" />
                         <SearchBar action="/customers" initial={filters.q} placeholder="Name, code or phone" />
                         {can('customers.create') ? (
                             <Link href="/customers/create" className="btn btn-sm btn-primary text-nowrap">

