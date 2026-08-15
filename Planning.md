@@ -1485,7 +1485,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | Phase    | Name                    | Contents                                                                                                                                                                                                                               | Exit gate                                                                                                                                                                                     |
 | -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **P0 ✔** | Foundation              | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | **GATE CLOSED 2026-08-15** — see Appendix C                                                                                                                                                   |
-| **P1 ✔** | Access                  | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log                                                                                                  | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test                                                    |
+| **P1 ✔** | Access                  | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/User admin, Audit log. *(**Department admin was listed here and never built** — corrected 2026-08-16, see Appendix AE)*                                                                                                  | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test                                                    |
 | **P2 ✔** | Master data             | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering                                                                                                                                     | Price resolution returns a decomposition; numbering unique under concurrency                                                                                                                  |
 | **P3 ✔** | Orders                  | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment                                                                                                                         | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason                                                                                |
 | **P4 ✔** | Inventory & Purchasing  | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine                                                                                                                                 | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks                                                                               |
@@ -3769,5 +3769,69 @@ being asked.
 | AD-3 | No half-days. Leave is whole working days only |
 | AD-4 | No leave calendar or team view — a manager cannot see who is away next week without reading requests one at a time |
 | AD-5 | Entitlement is a flat annual number. No accrual by month, no carry-forward, no pro-rating for a mid-year joiner, though `joined_at` is recorded |
-| AD-6 | **Departments still have no screen**, so the field on the People form remains an empty dropdown. Same shape as the pipeline-stage gap closed in AB |
+| AD-6 ✔ | ~~Departments still have no screen~~ **CLOSED by removal** — the field is gone from the People form. See Appendix AE for why a screen would have been the wrong fix |
 | AD-7 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix AE — Removing a field rather than building a screen (2026-08-16)
+
+Asked whether AD-6 needed fixing. Checking it produced a different answer than the item implied.
+
+| | |
+|---|---|
+| Can a `Department` be created? | **Nowhere.** No `Department::create` in `app/` or any seeder |
+| What reads `department_id`? | **Nothing.** No domain service, no report, no data scope |
+| Is it on the People form? | Yes, as a dropdown |
+
+So the form offered a dropdown that could never be populated, **for a field nothing consumed.**
+Building the screen would have let somebody fill it in, and it would still have affected nothing —
+a longer walk to the same place.
+
+The defect was not "no screen". It was **a field with no purpose**, and the smallest honest fix was
+to stop offering it. The table remains for whenever departments are given a job.
+
+### The P1 gate claimed something that was never built
+
+The P1 row reads *"Company/Branch/**Department**/User admin"* and is marked **✔ GATE CLOSED**.
+Department admin does not exist and never did.
+
+That is worse than the AA-1 case. AA-1 was a wrong note on a carried-forward list; this is an
+overstatement inside a **closed phase gate**, which is the part of this document a reader is most
+entitled to trust. Corrected in place rather than quietly deleted.
+
+### D-20: the guard against unfillable fields was itself unfillable
+
+A guard was added so no screen can offer a field nothing can populate. It passed. Restoring the
+`department_id` field to prove it fires — and it **still passed**.
+
+`glob('resources/js/Pages/**/*.tsx')` does not recurse in PHP. `**` is a bash feature; PHP's `glob`
+treats it as a single directory level. The guard was scanning **zero files** and would have passed on
+any codebase whatsoever.
+
+Rewritten with `RecursiveDirectoryIterator`, and it now **asserts it found files before drawing any
+conclusion from their absence**:
+
+```php
+expect($php)->not->toBeEmpty('the scan found no PHP, so this guard would pass on anything');
+```
+
+Seventh time in this project a test has passed for the wrong reason, and the second time it was a
+guard written specifically to catch that class of problem. The generalisation is now explicit:
+**a check that searches for something must first prove it looked somewhere.** An empty result set and
+an empty search are indistinguishable in the assertion, and only one of them means anything.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,651 passed / 3,399 assertions** |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AE-1 | The `departments` table, model and isolation seed recipe remain, with nothing reading or writing them. Kept deliberately — the cost of the table is nil and the decision to give departments a job has not been taken |
+| AE-2 | **Other closed gates may carry the same overstatement.** P1's was found only because somebody asked about a related item. Nobody has re-read P0–P8 against what actually exists |

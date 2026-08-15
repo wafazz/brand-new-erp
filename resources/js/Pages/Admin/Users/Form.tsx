@@ -20,7 +20,6 @@ export interface MemberFormValues {
     password: string
     role: string
     branch_id: string
-    department_id: string
     employee_no: string
     is_active: boolean
 }
@@ -31,7 +30,6 @@ export const EMPTY_MEMBER: MemberFormValues = {
     password: '',
     role: '',
     branch_id: '',
-    department_id: '',
     employee_no: '',
     is_active: true,
 }
@@ -41,12 +39,11 @@ interface Props {
     errors: Partial<Record<string, string>>
     roles: RoleOption[]
     branches: Reference[]
-    departments: Reference[]
     withAccount: boolean
     onChange: <K extends keyof MemberFormValues>(key: K, value: MemberFormValues[K]) => void
 }
 
-export default function MemberForm({ values, errors, roles, branches, departments, withAccount, onChange }: Props) {
+export default function MemberForm({ values, errors, roles, branches, withAccount, onChange }: Props) {
     const chosen = roles.find((role) => role.value === values.role)
 
     return (
@@ -104,10 +101,6 @@ export default function MemberForm({ values, errors, roles, branches, department
 
                         <FormField label="Branch" name="branch_id" error={errors.branch_id} hint="Branch-scoped roles see only this branch.">
                             <SelectInput name="branch_id" value={values.branch_id} options={branches} placeholder="No branch" onChange={(v) => onChange('branch_id', v)} />
-                        </FormField>
-
-                        <FormField label="Department" name="department_id" error={errors.department_id}>
-                            <SelectInput name="department_id" value={values.department_id} options={departments} placeholder="No department" onChange={(v) => onChange('department_id', v)} />
                         </FormField>
 
                         <FormField label="Employee number" name="employee_no" error={errors.employee_no}>

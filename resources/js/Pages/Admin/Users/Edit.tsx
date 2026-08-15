@@ -10,24 +10,21 @@ interface Props {
         email: string | null
         role: string | null
         branch_id: string | null
-        department_id: string | null
         employee_no: string | null
         is_active: boolean
         is_self: boolean
     }
     roles: RoleOption[]
     branches: Reference[]
-    departments: Reference[]
 }
 
-export default function UserEdit({ member, roles, branches, departments }: Props) {
+export default function UserEdit({ member, roles, branches }: Props) {
     const { data, setData, put, processing, errors } = useForm<MemberFormValues>({
         name: member.name ?? '',
         email: member.email ?? '',
         password: '',
         role: member.role ?? '',
         branch_id: member.branch_id ?? '',
-        department_id: member.department_id ?? '',
         employee_no: member.employee_no ?? '',
         is_active: member.is_active,
     })
@@ -66,7 +63,6 @@ export default function UserEdit({ member, roles, branches, departments }: Props
                     errors={errors}
                     roles={roles}
                     branches={branches}
-                    departments={departments}
                     withAccount={false}
                     onChange={(key, value) => setData((previous) => ({ ...previous, [key]: value }))}
                 />

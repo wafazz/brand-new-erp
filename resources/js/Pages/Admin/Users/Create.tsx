@@ -6,10 +6,9 @@ import MemberForm, { EMPTY_MEMBER, type MemberFormValues, type Reference, type R
 interface Props {
     roles: RoleOption[]
     branches: Reference[]
-    departments: Reference[]
 }
 
-export default function UserCreate({ roles, branches, departments }: Props) {
+export default function UserCreate({ roles, branches }: Props) {
     const { data, setData, post, processing, errors } = useForm<MemberFormValues>({ ...EMPTY_MEMBER })
 
     return (
@@ -40,7 +39,6 @@ export default function UserCreate({ roles, branches, departments }: Props) {
                     errors={errors}
                     roles={roles}
                     branches={branches}
-                    departments={departments}
                     withAccount
                     onChange={(key, value) => setData((previous) => ({ ...previous, [key]: value }))}
                 />

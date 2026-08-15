@@ -110,3 +110,53 @@ it('points every configured page path at a directory whose name matches on disk 
         'A case-insensitive filesystem hides this and a Linux runner does not: '.implode('; ', $offenders)
     );
 });
+
+it('offers no form field that nothing in the system can fill', function (): void {
+    $sources = static fn (string $dir, string $ext): array => array_map(
+        static fn (SplFileInfo $file): string => $file->getPathname(),
+        iterator_to_array(
+            new RegexIterator(
+                new RecursiveIteratorIterator(new RecursiveDirectoryIterator(base_path($dir))),
+                "/\\.{$ext}$/"
+            ),
+            false
+        )
+    );
+
+    $php = $sources('app', 'php');
+    $screens = $sources('resources/js/Pages', 'tsx');
+
+    expect($php)->not->toBeEmpty('the scan found no PHP, so this guard would pass on anything')
+        ->and($screens)->not->toBeEmpty('the scan found no screens, so this guard would pass on anything');
+
+    $unfillable = [];
+
+    foreach (['Department'] as $model) {
+        $created = false;
+
+        foreach ($php as $path) {
+            if (str_contains((string) file_get_contents($path), "{$model}::create(")) {
+                $created = true;
+                break;
+            }
+        }
+
+        if ($created) {
+            continue;
+        }
+
+        $field = str($model)->snake()->toString().'_id';
+
+        foreach ($screens as $path) {
+            if (str_contains((string) file_get_contents($path), $field)) {
+                $unfillable[] = basename($path)." offers {$field}, and nothing creates a {$model}";
+            }
+        }
+    }
+
+    expect($unfillable)->toBe(
+        [],
+        'A dropdown that can never be populated tells the user the system does something it does not: '.
+        implode('; ', $unfillable)
+    );
+});

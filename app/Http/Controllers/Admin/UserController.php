@@ -10,7 +10,6 @@ use App\Enums\CompanyRole;
 use App\Http\Controllers\Controller;
 use App\Models\Branch;
 use App\Models\CompanyUser;
-use App\Models\Department;
 use App\Models\User;
 use App\Services\Audit\AuditRecorder;
 use App\Support\CompanyContext;
@@ -93,7 +92,6 @@ class UserController extends Controller
 
                 $member = $this->access->addMember($request->user(), $subject, CompanyRole::from($data['role']), [
                     'branch_id' => $data['branch_id'] ?? null,
-                    'department_id' => $data['department_id'] ?? null,
                     'employee_no' => $data['employee_no'] ?? null,
                     'is_active' => $data['is_active'] ?? true,
                     'joined_at' => now(),
@@ -130,7 +128,6 @@ class UserController extends Controller
                 'email' => $member->user?->email,
                 'role' => $member->role?->value,
                 'branch_id' => $member->branch_id,
-                'department_id' => $member->department_id,
                 'employee_no' => $member->employee_no,
                 'is_active' => $member->is_active,
                 'is_self' => $member->user_id === $request->user()->getKey(),
@@ -147,7 +144,6 @@ class UserController extends Controller
         try {
             $this->access->updateMember($request->user(), $member, CompanyRole::from($data['role']), [
                 'branch_id' => $data['branch_id'] ?? null,
-                'department_id' => $data['department_id'] ?? null,
                 'employee_no' => $data['employee_no'] ?? null,
                 'is_active' => $data['is_active'] ?? true,
             ]);
@@ -181,8 +177,6 @@ class UserController extends Controller
             'roles' => $this->assignableRoles($request->user()),
             'branches' => Branch::query()->where('is_active', true)->orderBy('name')->get()
                 ->map(fn (Branch $b): array => ['value' => $b->getKey(), 'label' => $b->name])->all(),
-            'departments' => Department::query()->orderBy('name')->get()
-                ->map(fn (Department $d): array => ['value' => $d->getKey(), 'label' => $d->name])->all(),
         ];
     }
 
@@ -194,7 +188,6 @@ class UserController extends Controller
         $rules = [
             'role' => ['required', Rule::in(array_column(CompanyRole::cases(), 'value'))],
             'branch_id' => ['nullable', 'string', Rule::exists('branches', 'id')->where('company_id', $companyId)],
-            'department_id' => ['nullable', 'string', Rule::exists('departments', 'id')->where('company_id', $companyId)],
             'employee_no' => ['nullable', 'string', 'max:40'],
             'is_active' => ['nullable', 'boolean'],
         ];
