@@ -53,6 +53,19 @@ class OrderPolicy extends BasePolicy
         return $this->allowsRecord($user, 'view', $order);
     }
 
+    public function refund(User $user, Order $order): bool
+    {
+        if (! $user->can('payments.refund')) {
+            return false;
+        }
+
+        if ($order->pos_session_id !== null && ! $user->can('pos.manage')) {
+            return false;
+        }
+
+        return $this->allowsRecord($user, 'view', $order);
+    }
+
     public function issueInvoice(User $user, Order $order): bool
     {
         if (! $user->can('invoices.issue')) {

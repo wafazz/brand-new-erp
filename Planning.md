@@ -3473,8 +3473,66 @@ happens; moving stock happens only if there is somewhere to move it to.
 
 | ID | Item |
 |---|---|
-| Z-1 | A refund away from the till is **not restricted the way a till refund is** — no session rule, no register limit, only `payments.create` and the order's data scope |
+| Z-1 ✔ | ~~A refund away from the till is not restricted~~ **CLOSED** — refunding is its own permission, and a till sale keeps its supervisor rule wherever it is refunded |
 | Z-2 | There is still no credit note. The refund is a negative payment on the original order, which is honest but leaves no document to hand a customer |
 | Z-3 | Nothing reports orders with money owed back. Finding them means opening orders one at a time |
 | Z-4 | Still open: no exchange flow (W-4), no cross-branch returns (W-2), no held sales (V-3), no screen for the register refund limit (Y-1) |
 | Z-5 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix AA — Closing the bypass I opened beside a fixed hole (2026-08-15)
+
+Appendix Y put supervisor controls on till refunds. Appendix Z added a refund on the order screen
+with none of them, needing only `payments.create`. **A cashier blocked at the till could do the same
+thing one screen over.**
+
+That is worth naming plainly: fixing a fraud hole and opening a smaller one beside it is a worse
+outcome than leaving the first one visible, because the control now *looks* present.
+
+### Two changes
+
+**Refunding is its own permission.** `payments.refund` is separate from `payments.create`, because
+taking money in and giving it back are different privileges with different fraud profiles. The
+wildcard grants gave it to owner, admin and accountant; nobody else has it.
+
+**A till sale keeps its till rule wherever it is refunded.** `OrderPolicy::refund()` requires
+`pos.manage` for any order carrying a `pos_session_id`, regardless of which screen the request came
+from. The accountant is the case that proves it: they hold `payments.refund` and not `pos.manage`,
+so they can refund an ordinary order and are refused a counter sale.
+
+The rule is deliberately about the **order's origin**, not the request's route. A control that
+depends on which URL was used is a control that a different URL removes.
+
+### D-19: a test that could not have failed
+
+Planting the removal of the data-scope check passed. The test used an owner at company scope, so
+removing the scope narrowing changed nothing — the actor could reach the order either way.
+
+Added a test that names it: a salesperson at `own` scope, holding `payments.refund`, refused a
+refund on a colleague's order. That one fails when the check is removed.
+
+Sixth occurrence this project. The distinguishing question is always the same: **could this test
+have failed if the guard it names were absent?** If the fixture makes the actor privileged enough to
+pass either way, the answer is no, and the test is decoration.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,591 passed / 3,223 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+Four guards proven by planting: the refund permission, the till-origin rule, the supervisor
+exemption, and the data scope.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AA-1 | The **register refund limit still only applies at the till.** A supervisor refunding from the order screen has no ceiling at all |
+| AA-2 | `payments.refund` is not on the roles-and-reach screen as anything special — it reads like any other permission, though it is one of the few that moves money outward |
+| AA-3 | Still open: no credit note (Z-2), nothing lists orders owing money back (Z-3), no exchange flow (W-4), no cross-branch returns (W-2), no held sales (V-3), no screen for the register limit (Y-1) |
+| AA-4 | Still true: **no screen has been used by a human** |

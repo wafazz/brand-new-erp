@@ -24,7 +24,7 @@ class PermissionRegistry
         'products' => ['view', 'create', 'update', 'delete'],
         'orders' => ['view', 'create', 'update', 'approve', 'cancel'],
         'invoices' => ['view', 'create', 'issue', 'void'],
-        'payments' => ['view', 'create'],
+        'payments' => ['view', 'create', 'refund'],
         'inventory' => ['view', 'adjust', 'transfer'],
         'purchasing' => ['view', 'create', 'approve', 'receive'],
         'leads' => ['view', 'create', 'update', 'convert'],

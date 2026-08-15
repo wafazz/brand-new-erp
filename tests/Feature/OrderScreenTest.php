@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
+use App\Domain\Orders\OrderService;
 use App\Domain\Orders\OrderStateMachine;
+use App\Domain\Pos\PosService;
 use App\Enums\CompanyRole;
 use App\Enums\DataScope;
 use App\Enums\ExceptionStatus;
@@ -10,8 +12,10 @@ use App\Enums\FulfilmentStatus;
 use App\Models\Company;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Permission;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\Role;
 use App\Models\User;
 use Database\Seeders\ModuleSeeder;
 use Database\Seeders\PermissionSeeder;
@@ -366,16 +370,115 @@ it('shows what a returned order owes the customer, and refuses more than that', 
     });
 });
 
-it('refuses a refund from a role without payments.create', function (): void {
+it('refuses a refund to someone who may take money in but not give it back', function (): void {
     $f = routeFixture();
 
-    grant($f['company'], CompanyRole::Salesperson, 'orders.view', DataScope::Own);
+    grant($f['company'], CompanyRole::Owner, 'orders.view', DataScope::Company);
+    grant($f['company'], CompanyRole::Owner, 'payments.create', DataScope::Company);
 
-    $order = screenOrderFor($f['company'], $f['alice'], 'SO-NOREFUND', '100');
+    $order = screenOrderFor($f['company'], $f['owner'], 'SO-NOREFUND', '100');
 
-    $this->actingAs($f['alice'])
-        ->post("/orders/{$order->getKey()}/refunds", ['amount' => '10', 'method' => 'cash'])
+    $this->actingAs($f['owner'])->post("/orders/{$order->getKey()}/payments", ['amount' => '100', 'method' => 'cash']);
+
+    $this->withCompany($f['company'], function () use ($f, $order): void {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($f['company']->getKey());
+
+        Role::query()->where('name', 'owner')->firstOrFail()
+            ->revokePermissionTo(Permission::query()->where('name', 'payments.refund')->firstOrFail());
+
+        app(PermissionRegistrar::class)->forgetCachedPermissions();
+
+        expect($f['owner']->fresh()->can('payments.create'))->toBeTrue('they can still take money in')
+            ->and($f['owner']->fresh()->can('payments.refund'))->toBeFalse('but not give it back');
+
+        foreach (['pending', 'approved', 'allocated', 'picked', 'packed', 'shipped'] as $step) {
+            app(OrderStateMachine::class)
+                ->transition($order->refresh(), FulfilmentStatus::from($step), $f['owner']);
+        }
+
+        app(OrderStateMachine::class)
+            ->transition($order->refresh(), ExceptionStatus::Returned, $f['owner'], 'Came back');
+    });
+
+    $this->actingAs($f['owner'])
+        ->post("/orders/{$order->getKey()}/refunds", ['amount' => '100', 'method' => 'cash'])
         ->assertForbidden();
+
+    $this->withCompany($f['company'], function () use ($order): void {
+        expect((string) $order->fresh()?->paid_amount)->toBe('100.0000');
+    });
+});
+
+it('refuses an accountant refunding a till sale from the order screen', function (): void {
+    $f = tillFixture('20', '25');
+
+    $accountant = person($f['company'], CompanyRole::Accountant, 'books@acme.test', $f['branch']);
+
+    grant($f['company'], CompanyRole::Accountant, 'orders.view', DataScope::Company);
+
+    $sale = $this->withCompany($f['company'], function () use ($f): Order {
+        $session = app(PosService::class)->openSession($f['register'], $f['alice'], '0');
+
+        return app(PosService::class)->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '2']],
+            [['method' => 'cash', 'amount' => '50']],
+            $f['alice'],
+        );
+    });
+
+    $this->withCompany($f['company'], function () use ($f, $accountant): void {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($f['company']->getKey());
+
+        expect($accountant->can('payments.refund'))->toBeTrue('an accountant may refund in general')
+            ->and($accountant->can('pos.manage'))->toBeFalse('but does not supervise the till');
+    });
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        app(OrderStateMachine::class)
+            ->transition($sale->refresh(), ExceptionStatus::Returned, $f['owner'], 'Brought back');
+    });
+
+    $this->actingAs($accountant)->get("/orders/{$sale->getKey()}")->assertOk();
+
+    $this->actingAs($accountant)
+        ->post("/orders/{$sale->getKey()}/refunds", ['amount' => '50', 'method' => 'cash'])
+        ->assertForbidden();
+
+    $this->withCompany($f['company'], function () use ($sale): void {
+        expect((string) $sale->fresh()?->paid_amount)->toBe('50.0000', 'the till bypass is closed');
+    });
+});
+
+it('lets a till supervisor refund a till sale from the order screen', function (): void {
+    $f = tillFixture('20', '25');
+
+    grant($f['company'], CompanyRole::Owner, 'orders.view', DataScope::Company);
+
+    $sale = $this->withCompany($f['company'], function () use ($f): Order {
+        $session = app(PosService::class)->openSession($f['register'], $f['alice'], '0');
+
+        return app(PosService::class)->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '2']],
+            [['method' => 'cash', 'amount' => '50']],
+            $f['alice'],
+        );
+    });
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        app(OrderStateMachine::class)
+            ->transition($sale->refresh(), ExceptionStatus::Returned, $f['owner'], 'Brought back');
+    });
+
+    $this->actingAs($f['owner'])
+        ->post("/orders/{$sale->getKey()}/refunds", ['amount' => '50', 'method' => 'cash'])
+        ->assertRedirect()
+        ->assertSessionMissing('error');
+
+    $this->withCompany($f['company'], function () use ($sale): void {
+        expect((string) $sale->fresh()?->paid_amount)->toBe('0.0000');
+    });
 });
 
 it('refuses to refund an order that owes nothing back', function (): void {
@@ -395,5 +498,39 @@ it('refuses to refund an order that owes nothing back', function (): void {
 
     $this->withCompany($f['company'], function () use ($order): void {
         expect((string) $order->fresh()?->paid_amount)->toBe('100.0000');
+    });
+});
+
+it('refuses a refund on an order outside the actor data scope', function (): void {
+    $f = routeFixture();
+
+    grant($f['company'], CompanyRole::Salesperson, 'orders.view', DataScope::Own);
+    grant($f['company'], CompanyRole::Salesperson, 'payments.create', DataScope::Own);
+    grant($f['company'], CompanyRole::Salesperson, 'payments.refund', DataScope::Own);
+
+    $bobs = screenOrderFor($f['company'], $f['bob'], 'SO-BOB', '100');
+
+    $this->withCompany($f['company'], function () use ($f, $bobs): void {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($f['company']->getKey());
+
+        expect($f['alice']->can('payments.refund'))->toBeTrue('alice may refund her own orders');
+
+        app(OrderService::class)->recordPayment($bobs, '100', 'cash', null, $f['bob']);
+
+        foreach (['pending', 'approved', 'allocated', 'picked', 'packed', 'shipped'] as $step) {
+            app(OrderStateMachine::class)
+                ->transition($bobs->refresh(), FulfilmentStatus::from($step), $f['bob']);
+        }
+
+        app(OrderStateMachine::class)
+            ->transition($bobs->refresh(), ExceptionStatus::Returned, $f['bob'], 'Returned');
+    });
+
+    $this->actingAs($f['alice'])
+        ->post("/orders/{$bobs->getKey()}/refunds", ['amount' => '100', 'method' => 'cash'])
+        ->assertForbidden();
+
+    $this->withCompany($f['company'], function () use ($bobs): void {
+        expect((string) $bobs->fresh()?->paid_amount)->toBe('100.0000');
     });
 });

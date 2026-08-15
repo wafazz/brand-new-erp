@@ -184,6 +184,7 @@ class OrderController extends Controller
                 'approve' => $user?->can('approve', $order) ?? false,
                 'cancel' => $user?->can('cancel', $order) ?? false,
                 'record_payment' => $user?->can('recordPayment', $order) ?? false,
+                'refund' => $user?->can('refund', $order) ?? false,
                 'issue_invoice' => $user?->can('issueInvoice', $order) ?? false,
             ],
         ]);
@@ -292,7 +293,7 @@ class OrderController extends Controller
 
     public function refund(Request $request, Order $order): RedirectResponse
     {
-        $this->authorize('recordPayment', $order);
+        $this->authorize('refund', $order);
 
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'gt:0'],

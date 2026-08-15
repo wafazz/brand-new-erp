@@ -100,6 +100,7 @@ interface Props {
         approve: boolean
         cancel: boolean
         record_payment: boolean
+        refund: boolean
         issue_invoice: boolean
     }
 }
@@ -182,7 +183,7 @@ export default function OrderShow({ order, items, attribution, timeline, commiss
                                 Record payment
                             </button>
                         ) : null}
-                        {permissions.record_payment && Number(order.refund_due) > 0 ? (
+                        {permissions.refund && Number(order.refund_due) > 0 ? (
                             <button type="button" className="btn btn-sm btn-warning" onClick={() => setRefundOpen((open) => !open)}>
                                 Refund {order.currency} {Number(order.refund_due).toFixed(2)}
                             </button>
