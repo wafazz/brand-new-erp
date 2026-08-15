@@ -15,7 +15,7 @@ Route::middleware('guest')->group(function (): void {
 
 Route::post('/logout', [LoginController::class, 'destroy'])->middleware('auth')->name('logout');
 
-Route::redirect('/', '/dashboard');
+Route::get('/', fn () => redirect('/dashboard'));
 
 Route::middleware(['auth', 'company'])->group(function (): void {
     Route::get('/dashboard', DashboardController::class)->name('dashboard');

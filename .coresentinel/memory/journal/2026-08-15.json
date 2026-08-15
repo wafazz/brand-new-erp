@@ -107,6 +107,18 @@
         "ledger"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 16:30:24",
+      "entry": "P8 Reporting gate CLOSED. Both criteria met and proven by mutation. The precomputed rollup is verified against an INDEPENDENT live oracle - rollup by SQL GROUP BY, oracle by PHP iteration with exact Money arithmetic - so the comparison is a genuine cross-check rather than a tautology; planting a cost-times-quantity bug fails it on the first run. Rebuilds are idempotent across three runs and a cancelled order drops out. Every dashboard figure passes through the data-scope resolver: two salespeople see 1000 and 500 while the owner sees 1500, a salesperson with no orders sees zero rather than someone else's numbers, and removing visibleTo fails the test. Breakdown tables use the same scoped query so a chart cannot leak what a list would not. Also closed part of the UI gap I flagged at the end of P7: the first real working surface is a role-aware dashboard with five variants that falls back rather than serving a variant the role lacks. Two P0 tests asserted placeholder dashboard props; one was updated and the other, which was proving company isolation through branchCount, had its intent preserved by asserting branch isolation directly rather than being deleted. 1261 tests, 106 tables.",
+      "tags": [
+        "p8",
+        "erp",
+        "gate-closed",
+        "reporting",
+        "dashboards"
+      ],
+      "agent": "Iris"
     }
   ]
 }

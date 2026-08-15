@@ -1493,7 +1493,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P6 ✔** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
 | **P7 ✔** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
 | **P8 ✔** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
-| **P9** | Hardening & Launch | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy | External security review clean; restore rehearsed and documented |
+| **P9 ~** | Hardening & Launch | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy | External security review clean; restore rehearsed and documented |
 | **P10** | Optional modules | HR, Payroll, POS, CRM, Projects, Assets, Tickets, Subscriptions | Per module |
 
 **Hard scope gate:** no work past P4 until one real SME is using P0–P4. Adopted from SMEOS's
@@ -2148,3 +2148,111 @@ Two P0 tests asserted the placeholder dashboard props (`branchCount`, `userCount
 | P8-4 | Dashboards read only sales and commission rollups. Inventory value, cash position and top products from §20 are not implemented |
 | P8-5 | Only the dashboard has a UI. Customers, products, orders, inventory, purchasing, invoices and commission remain service-layer only |
 | P8-6 | No charts — figures are stat tiles and tables. Deliberate for now (D-07 in the original prior art was a chart-library choice; nothing has been chosen here) |
+
+---
+
+## Appendix L — P9 Evidence (gate PARTIALLY met, 2026-08-15)
+
+### Honest status
+
+The P9 exit gate reads: *"External security review clean; restore rehearsed and documented."*
+
+**The second half is met and evidenced below. The first half is not, and cannot be met by me** —
+an external security review is by definition performed by a third party. What was done instead is
+an internal review against `40-security-protocol.md`, converted into a permanent test suite, plus
+three real findings fixed. The phase is therefore marked `[~]`, not `[✔]`.
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **1,283 passed, 1,883 assertions** (Unit 65 · Architecture 10 · Isolation 1,016 · Feature 163 · Concurrency 10 · **Security 19**) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` / `vite build` | pass |
+| CoreSentinel scanner | clean |
+
+### Three security findings, fixed and guarded
+
+| # | Finding | Fix |
+|---|---|---|
+| **S-1** | **The private disk was serving unauthenticated routes.** Laravel 11/12 ships `config/filesystems.php` with `'serve' => true` on the `local` disk, registering `GET /storage/{path}` **and `PUT /storage/{path}` with no middleware at all** — unauthenticated read *and write* against the disk intended for business documents | `'serve' => false`; a test now fails if any route under `storage/` has an empty middleware stack |
+| **S-2** | **The queue dashboard had no explicit gate.** Horizon fell back to its environment default, so access depended on `APP_ENV` rather than on a decision | `Gate::define('viewHorizon', …)` requiring `modules.manage`; asserted by test |
+| **S-3** | The root path answered `POST`, `PUT`, `PATCH` and `DELETE` because `Route::redirect` registers for every verb | Explicit `Route::get`; asserted by test |
+
+S-1 is the one that mattered. It is invisible in a `route:list` review unless you inspect middleware, and nothing in the default test suite catches it.
+
+### The security review is now a suite, not a document
+
+19 assertions that run on every commit: passwords hashed and hidden, login throttled, **every**
+state-changing route carrying `auth` + `company`, CSRF in the web group, private disk serving
+nothing, Horizon gated, session cookies `httpOnly`/`SameSite`, no privilege boolean on `users`,
+debug never on in production, and no secret in `.env.example`.
+
+### PDPA erasure is implemented
+
+`ErasureService::eraseCustomer()` anonymises the customer, contacts, addresses, converted leads and
+the customer snapshot on every order, then **retains invoices under accounting obligation** and
+records the erasure itself in the audit trail. It refuses to run without a stated reason. Tests
+confirm the identity survives nowhere it was written (`Aminah`, the phone number, the street) while
+order and invoice totals remain intact so the ledger still reconciles.
+
+This closes the collision §30 predicted between an append-only audit trail and a right to erasure:
+operational PII is anonymised, financial records are retained, and the audit trail itself has a
+deliberate purge path (`AuditPurger`, from P1).
+
+### Restore rehearsed — and the rehearsal found a defect
+
+**The first backup attempt failed outright:** `pg_dump: aborting because of server version mismatch`.
+The client on `PATH` is 14.18; the server is 16.14. Had this not been rehearsed, the first real
+backup would have failed during an incident.
+
+`backup.sh` and `restore.sh` now resolve a client whose major version matches the running server,
+and `backup.sh` refuses to write a dump under 1 KB so an empty file is never mistaken for a backup.
+
+Verified round-trip:
+
+| Check | Original | Restored |
+|---|---|---|
+| Tables | 106 | 106 |
+| Triggers | 11 | 11 |
+| CHECK constraints | 91 | 91 |
+| Foreign keys | 270 | 270 |
+| Row counts (companies/branches/products/customers/permissions/modules) | 1/1/1/1/24/6 | identical |
+
+**Integrity survives the round-trip, proven against real rows rather than empty tables.** Inserting
+a journal line into the restored database and attempting to edit it returns
+*"the journal is append-only; UPDATE is not permitted. Post a reversing entry instead."*
+`UNIQUE NULLS NOT DISTINCT` is preserved on `commissions_unique_accrual`.
+
+### Performance pass
+
+Query-budget tests now guard the two screens that exist. The audit screen holds at **7 queries for
+3 rows and for 30** — flat, not N+1 — and removing its eager load fails the test.
+
+One measurement lesson worth recording: the first attempt compared a cold request against a warm
+one and read **12 queries for 3 rows versus 7 for 30**. The count went *down*, because the first
+request primes the permission cache. Both a "pass" and a "fail" read from that would have been
+wrong. The test now warms up before measuring.
+
+### Handoff artefacts
+
+`README.md` and `DEPLOYMENT.md` written per `52-handoff-protocol.md`, including a post-deploy
+verification checklist that explicitly tests the S-1 fix (`curl -I …/storage/anything` must 404).
+
+Cleanup verified, not assumed: no `dd`/`dump`/`var_dump`, no `console.log`, no hardcoded
+localhost, `.env.example` complete and secret-free, migration from zero produces 106 tables, all
+routes resolve.
+
+**No seeder creates a user.** The first account is created interactively at deploy time, so no
+known-credential account can reach production.
+
+### What remains before this can go live
+
+| ID | Item |
+|---|---|
+| P9-1 | **External security review** — the gate's first half. Recommended before any real customer data is loaded |
+| P9-2 | **Nothing is scheduled.** Rollups and the reservation sweep have no scheduler entries; dashboards will go stale and expired holds will never release |
+| P9-3 | **No CI run against this suite in a real pipeline** — the workflow exists from P0 but has never executed on a runner |
+| P9-4 | Backups are not yet copied off-machine, and no restore rehearsal is scheduled |
+| P9-5 | **The UI gap.** Nine phases of domain logic sit behind authentication, branch admin, an audit viewer and dashboards. This is not yet a system staff can operate |
+| P9-6 | Q-18 / P4-4 / R-14 — landed cost is still not apportioned, and commission depends on it |
