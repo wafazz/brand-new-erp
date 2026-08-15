@@ -26,7 +26,7 @@ and marketing attribution, for a Malaysian company operating across multiple bra
 | Roles | 11 | 
 | Permissions | 74 |
 | Data scopes | 5 (own, team, branch, company, all) |
-| Tests | 1,746 passing / 3,629 assertions |
+| Tests | 1,749 passing / 3,633 assertions |
 
 There is no public API and no file upload. Every route requires a session except `GET|POST /login`
 and **two Billplz payment routes, which are authenticated by HMAC signature rather than by a
@@ -234,6 +234,7 @@ Recorded in full in `Planning.md`. Listed here so you do not spend time on them.
 | D-2 | An append-only audit table blocked company deletion, colliding with PDPA erasure. Resolved with a scoped purge flag |
 | D-3 | Three authorization tests passed for the wrong reason — a *different* guard was refusing. Rewritten to isolate |
 | D-6 | Two access-control guards were unreachable; re-submitting an unchanged role counted as granting it |
+| G-2 | `HandleInertiaRequests` shared a user's full permission list guarded only on the user being present, not on a company being bound. A remembered session opening `/login` produced a 500 before the `guest` middleware could redirect. Guest-reachable routes are now swept for this |
 | G-1 | A Billplz callback claiming a non-positive amount credited nothing but still marked the payment intent settled, so the genuine callback behind it would have been discarded as a replay and the payment lost |
 
 ---

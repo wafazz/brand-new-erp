@@ -248,7 +248,7 @@ composer gate          # Pint + PHPStan + Pest
 ./vendor/bin/pest
 ```
 
-**1,746 tests, 3,629 assertions**, in six suites that each do a different job:
+**1,749 tests, 3,633 assertions**, in six suites that each do a different job:
 
 | Suite | What it protects |
 |---|---|
@@ -275,8 +275,9 @@ are.
 
 Stated plainly, because a README that only lists strengths is not useful.
 
-- **No screen has been used by a human to do a day's work.** Every claim here rests on tests and a
-  build.
+- **No screen has been used by a human to do a day's work.** The application has been opened; the
+  first minute of real use produced a 500 on the login page that 1,746 tests had missed. Everything
+  past that page is still unexercised.
 - **No external security review.** [`SECURITY-REVIEW.md`](SECURITY-REVIEW.md) is the brief prepared
   for one.
 - **Not one real payment has been taken.** The Billplz integration is implemented from the published

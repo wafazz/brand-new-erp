@@ -4164,3 +4164,86 @@ look closed.
 | AI-5 | No promo codes; no company-level admin screen |
 | AI-6 | The manifest pins today's claims. It cannot tell whether a **future** row is honest — that still needs a human re-reading the table against the code |
 | AI-7 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix AJ — The first bug found by using it (2026-08-16)
+
+Fakrul opened the application and hit a 500 on `GET /login`. First defect in this project found by a
+person rather than a test, and it took about a minute.
+
+```
+MissingCompanyContextException
+No company is bound to the current context, so [App\Models\Role] cannot be queried.
+```
+
+### What happened
+
+`HandleInertiaRequests::share()` shared two things that need a company:
+
+```php
+'can'        => $user === null ? [] : $user->getAllPermissions()->…,
+'navigation' => $user === null || ! app()->bound(Company::class) ? [] : …,
+```
+
+`navigation` guarded on **both** the user and the company. `can` guarded only on the user. Two lines
+apart, and only one of them was right.
+
+That difference is invisible on every authenticated route, because `ResolveCompany` has already bound
+a company by the time Inertia shares anything. It only shows on a route with **no company
+middleware** and a **signed-in user** — a combination that exists in exactly one place: a visitor
+with a `remember_web_*` cookie opening `/login`. Calling `$request->user()` resolves the remembered
+login, so the user is present, the company is not, and `getAllPermissions()` queries `Role` straight
+into the tenancy guard.
+
+Inertia's middleware calls `share()` **before** `$next($request)`, so this fires before the `guest`
+middleware ever gets the chance to redirect the visitor to their dashboard. The redirect that should
+have happened never ran.
+
+### Why 1,749 tests missed it
+
+Every feature test either signs in **and** binds a company, or does neither. No test had ever
+constructed the third state — authenticated with no company resolved — because no test uses a
+remember-me cookie, and nothing in the suite visits `/login` while signed in.
+
+**The suite tested the two states I had thought of.** A person with a browser produced the third by
+accident, in under a minute, without trying.
+
+### The fix, and the wider guard
+
+Both keys now derive from one condition, so they cannot drift apart again:
+
+```php
+$inCompany = $user !== null && $company !== null;
+```
+
+More usefully, `tests/Feature/GuestPageTest.php` now sweeps **every** guest-reachable GET route while
+signed in with no company bound, and fails on any 5xx. That generalises the fix: the next page added
+outside the auth group is checked automatically.
+
+### The sweep was hollow at first
+
+Planting the original bug back failed both new tests, as it should. Planting a hollowed-out *filter*
+— making the sweep skip every route — left it green, because a separate "is this vacuous?" test
+recomputed the route count **independently of the sweep**. It confirmed that guest routes exist, not
+that the sweep had visited any.
+
+The two tests were merged: the sweep now counts what it actually visited and asserts on that. Same
+lesson as Appendices AG and AH in a new costume — **a check that does not share state with the thing
+it is checking is not checking it.**
+
+### What this says about the readiness figure
+
+The estimate given before this was ~60%, and the reasoning was that the remaining work is
+verification rather than code. One minute of real use produced a 500 on the **first page of the
+application**, which is the strongest evidence yet for that reasoning.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AJ-1 | The suite has no coverage of remembered sessions at all — `remember_web_*` is never exercised anywhere |
+| AJ-2 | The guest sweep checks GET only. A signed-in POST to a guest route with no company bound is still untested |
+| AJ-3 | Two of three states were tested for a year because they were the two I had imagined. There is no reason to think this is the only such pair |
+| AJ-4 | **No longer true, at last:** a human has now opened the application. Everything past the login page is still unused |

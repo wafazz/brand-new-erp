@@ -23,6 +23,7 @@ class HandleInertiaRequests extends Middleware
     {
         $user = $request->user();
         $company = app()->bound(Company::class) ? app(Company::class) : null;
+        $inCompany = $user !== null && $company !== null;
 
         return [
             ...parent::share($request),
@@ -32,16 +33,14 @@ class HandleInertiaRequests extends Middleware
                     'name' => $user->name,
                     'email' => $user->email,
                 ],
-                'can' => $user === null ? [] : $user->getAllPermissions()->pluck('name')->values()->all(),
+                'can' => $inCompany ? $user->getAllPermissions()->pluck('name')->values()->all() : [],
             ],
             'company' => $company === null ? null : [
                 'id' => $company->getKey(),
                 'name' => $company->name,
                 'currency' => $company->currency,
             ],
-            'navigation' => $user === null || ! app()->bound(Company::class)
-                ? []
-                : app(NavigationBuilder::class)->for($user),
+            'navigation' => $inCompany ? app(NavigationBuilder::class)->for($user) : [],
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),
