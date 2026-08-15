@@ -48,3 +48,30 @@ it('declares the PHP version its lock file can actually install', function (): v
         '. composer install cannot succeed there, so the matrix promises support that does not exist.'
     );
 });
+
+it('migrates its own database in any suite that does not get one', function (): void {
+    $offenders = [];
+
+    foreach (['Unit', 'Architecture'] as $suite) {
+        foreach (glob(base_path("tests/{$suite}/*.php")) ?: [] as $path) {
+            if (realpath($path) === __FILE__) {
+                continue;
+            }
+
+            $source = (string) file_get_contents($path);
+
+            $touchesDatabase = preg_match('/\$this->seed\(|->withCompany\(|Schema::|DB::select\(/', $source) === 1;
+            $declaresRefresh = preg_match('/uses\([^)]*RefreshDatabase::class/', $source) === 1;
+
+            if ($touchesDatabase && ! $declaresRefresh) {
+                $offenders[] = "{$suite}/".basename($path);
+            }
+        }
+    }
+
+    expect($offenders)->toBe(
+        [],
+        'These tests read or write the database but sit in a suite that never migrates one. '.
+        'They pass only where a previous run left the schema behind: '.implode(', ', $offenders)
+    );
+});

@@ -3009,10 +3009,36 @@ The project's own rule says a test that has never been seen to fail proves nothi
 one level up: **a suite that has only ever run in one place has only ever proven something about
 that place.**
 
+### D-12: an architecture test needed a database its suite never migrates
+
+The second CI run got past the credential fix and ran Pest for four minutes before failing.
+
+`ModuleRouteTest` seeds permissions and creates a company, but it lives in the **Architecture**
+suite, which deliberately has no `RefreshDatabase` because its other tests only read source files.
+Locally it passed for five waves — my `sme_erp_test` database carried schema left behind by earlier
+runs. On a runner the database is empty when the Architecture suite runs, so it failed.
+
+Reproduced exactly by dropping the local test database and running the suite alone. Fixed with a
+per-file `uses(RefreshDatabase::class)`.
+
+A guard now fails if a test in `Unit` or `Architecture` seeds, resolves a company or touches the
+schema without declaring `RefreshDatabase`. **Writing that guard produced two of its own defects,
+both caught by planting:**
+
+- it first matched `::create(`, which flagged `Finder::create()` — a false positive
+- it then checked for the *string* `RefreshDatabase`, which the `use` import alone satisfies, so
+  removing the actual `uses()` call still passed
+
+The second is precisely the failure this project keeps naming. A guard written to catch tests
+passing for the wrong reason was itself passing for the wrong reason.
+
+**The full suite now passes against a dropped and recreated database: 1,499 / 2,882.** Until today
+that had never been tried.
+
 ### Carried forward
 
 | ID | Item |
 |---|---|
-| U-1 | CI has run once and failed. **A green run is still outstanding** — P9-3 does not close until one exists |
+| U-1 | CI has run twice and failed twice, each time finding a real defect. **A green run is still outstanding** — P9-3 does not close until one exists |
 | U-2 | PHP 8.3 is no longer supported. Dropping the Symfony 8 packages would restore it, if that ever matters to a deployment target |
 | U-3 | No coverage reporting, no static analysis of the frontend beyond `tsc`, and CI does not run the Concurrency suite's multi-process tests under load |

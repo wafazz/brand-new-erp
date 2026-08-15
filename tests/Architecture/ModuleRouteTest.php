@@ -7,6 +7,9 @@ use App\Models\Module;
 use App\Support\PermissionRegistry;
 use Database\Seeders\ModuleSeeder;
 use Database\Seeders\PermissionSeeder;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+uses(RefreshDatabase::class);
 
 beforeEach(function (): void {
     $this->seed(PermissionSeeder::class);
