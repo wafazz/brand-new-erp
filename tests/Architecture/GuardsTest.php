@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use App\Http\Middleware\ResolveCompany;
+use App\Models\Order;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Routing\Middleware\SubstituteBindings;
@@ -105,4 +106,50 @@ it('resolves the company after authentication and before route model binding', f
         ->and($bindings)->not->toBeFalse('SubstituteBindings is missing from the middleware priority list')
         ->and($auth)->toBeLessThan($company)
         ->and($company)->toBeLessThan($bindings);
+});
+
+it('writes an order status column only from the state machine', function (): void {
+    $allowed = [
+        'app/Domain/Orders/OrderStateMachine.php',
+        'app/Models/Order.php',
+    ];
+
+    $columns = ['payment_status', 'fulfilment_status', 'exception_status'];
+    $offenders = [];
+
+    foreach (phpSourceFiles() as $path) {
+        $relative = str_replace(dirname(__DIR__, 2).'/', '', $path);
+
+        if (in_array($relative, $allowed, true) || str_starts_with($relative, 'database/')) {
+            continue;
+        }
+
+        foreach (file($path) ?: [] as $number => $line) {
+            foreach ($columns as $column) {
+                if (preg_match("/'{$column}'\s*=>/", $line)) {
+                    $offenders[] = $relative.':'.($number + 1).' '.trim($line);
+                }
+            }
+        }
+    }
+
+    expect($offenders)->toBeEmpty();
+});
+
+it('keeps every order status column out of mass assignment', function (): void {
+    $fillable = (new Order)->getFillable();
+
+    foreach (['payment_status', 'fulfilment_status', 'exception_status'] as $column) {
+        expect(in_array($column, $fillable, true))
+            ->toBeFalse("Order exposes {$column} to mass assignment; only the state machine may write it.");
+    }
+});
+
+it('keeps order money totals out of mass assignment', function (): void {
+    $fillable = (new Order)->getFillable();
+
+    foreach (['subtotal', 'total', 'paid_amount', 'tax_amount', 'discount_amount'] as $column) {
+        expect(in_array($column, $fillable, true))
+            ->toBeFalse("Order exposes {$column} to mass assignment; only OrderService may write it.");
+    }
 });

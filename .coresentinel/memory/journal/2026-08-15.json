@@ -34,6 +34,18 @@
         "audit"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 14:27:14",
+      "entry": "P2 Master Data gate CLOSED. 21 new tables (customers, suppliers, catalogue, pricing, document sequences) bringing the schema to 44 tables with company_id NOT NULL everywhere and 28 composite FKs. PriceResolver returns a decomposition naming every source it considered and why it did or did not match - the winner alone was never the deliverable. Promotions apply on top of the resolved base rather than as another first-match step, a deliberate deviation from the plan's flat list. DocumentNumberService proven with 8 real OS processes allocating 80 numbers; removing lockForUpdate reproduces duplicates on 3 of 3 runs, so the concurrency test genuinely contends. Three defects found: a Postgres column DEFAULT does not populate an in-memory model (fixed with $attributes on 14 models), Laravel pluralised UnitOfMeasure to a table that did not exist (now guarded permanently by a model-to-table existence test), and Larastan types decimal casts as float when they are strings at runtime (probed, not assumed). 436 tests.",
+      "tags": [
+        "p2",
+        "erp",
+        "gate-closed",
+        "pricing",
+        "concurrency"
+      ],
+      "agent": "Iris"
     }
   ]
 }

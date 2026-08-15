@@ -20,6 +20,10 @@ use App\Models\CustomerGroup;
 use App\Models\Department;
 use App\Models\DocumentSequence;
 use App\Models\Module;
+use App\Models\Order;
+use App\Models\OrderEvent;
+use App\Models\OrderItem;
+use App\Models\Payment;
 use App\Models\Permission;
 use App\Models\PriceList;
 use App\Models\PriceListItem;
@@ -91,6 +95,14 @@ function newVariant(string $suffix): ProductVariant
     ]);
 }
 
+function newOrder(string $suffix): Order
+{
+    return Order::create([
+        'order_number' => 'SO-'.$suffix.'-'.str()->random(4),
+        'customer_name' => 'Walk-in '.$suffix,
+    ]);
+}
+
 function seedRowFor(string $class, Company $company): Model
 {
     return app(CompanyContext::class)->runAs($company->getKey(), function () use ($class): Model {
@@ -148,6 +160,25 @@ function seedRowFor(string $class, Company $company): Model
             TierPrice::class => ['product_variant_id' => newVariant($suffix)->getKey(), 'min_quantity' => '10', 'price' => '9.0000'],
             PromotionRule::class => ['code' => 'PM-'.$suffix, 'name' => 'Promo '.$suffix, 'discount_type' => 'percent', 'discount_value' => '5'],
             DocumentSequence::class => ['key' => 'seq-'.$suffix, 'prefix' => 'SQ'],
+            Order::class => ['order_number' => 'SO-'.$suffix, 'customer_name' => 'Walk-in '.$suffix],
+            OrderItem::class => [
+                'order_id' => newOrder($suffix)->getKey(),
+                'sku' => 'VR-'.$suffix,
+                'product_name' => 'Product '.$suffix,
+                'quantity' => '1',
+                'unit_price' => '10.0000',
+                'line_total' => '10.0000',
+            ],
+            OrderEvent::class => [
+                'order_id' => newOrder($suffix)->getKey(),
+                'event' => 'order.created',
+                'summary' => 'Created for the isolation suite.',
+            ],
+            Payment::class => [
+                'order_id' => newOrder($suffix)->getKey(),
+                'amount' => '10.0000',
+                'received_at' => now(),
+            ],
             RolePermissionScope::class => [
                 'role_id' => Role::create([
                     'name' => 'role-'.$suffix,

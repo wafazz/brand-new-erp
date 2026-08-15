@@ -70,6 +70,7 @@ it('gives every money column the same precision', function (): void {
           AND column_name NOT LIKE '%_id'
           AND column_name NOT LIKE '%_mode'
           AND column_name NOT LIKE '%_type'
+          AND data_type <> 'jsonb'
           AND NOT (data_type = 'numeric' AND numeric_precision = 15 AND numeric_scale = 4)
     SQL);
 

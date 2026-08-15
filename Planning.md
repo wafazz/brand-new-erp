@@ -1487,7 +1487,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P0 ✔** | Foundation | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | **GATE CLOSED 2026-08-15** — see Appendix C |
 | **P1 ✔** | Access | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test |
 | **P2 ✔** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
-| **P3** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
+| **P3 ✔** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
 | **P4** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
 | **P5** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
 | **P6** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
@@ -1743,3 +1743,82 @@ The test spawns **8 real OS processes** via `proc_open`, each allocating 10 numb
 | P2-5 | `Customer` is the only P2 model that is `Scopeable`. Products and suppliers are company-scoped but carry no owner, so `own`/`team` on them currently fails closed — correct, but it means product visibility is company-wide by design |
 | P2-6 | Channel pricing is a `price_lists.type` value with no resolver step, because channels do not exist until P5. The step slots in without a migration |
 | P2-7 | Product attributes, serial/batch/expiry and discount rules remain deferred per §10 |
+
+---
+
+## Appendix F — P3 Gate Evidence (closed 2026-08-15)
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **499 passed, 730 assertions** (Unit 63 · Architecture 8 · Isolation 378 · Feature 43 · Concurrency 7) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` | pass |
+| Schema | 48 tables; `orders`, `order_items`, `order_events`, `payments` added |
+
+### Three independent status axes
+
+| Axis | States |
+|---|---|
+| `payment_status` | `unpaid → partially_paid → paid → refunded` |
+| `fulfilment_status` | `draft → pending → approved → allocated → picked → packed → shipped → delivered → completed` (reversible before despatch) |
+| `exception_status` | `none → on_hold / cancelled / returned` |
+
+Both situations §7 predicted are expressible without a hybrid state, and both are tested:
+a **COD order packed while still unpaid**, and an order **shipped and then refunded**.
+
+### The gate: no status logic outside the state machine
+
+An architecture test greps `app/` for any write to `payment_status`, `fulfilment_status` or
+`exception_status` outside `OrderStateMachine` and the `Order` model's own defaults. Two further
+guards assert the status columns and the money totals are absent from `Order::$fillable`.
+
+**Anti-tautology proof:** adding `'payment_status' => 'paid'` to a `forceFill` inside
+`OrderService` failed the guard; removing it passed.
+
+### Illegal transitions rejected with a readable reason
+
+`reasonAgainst()` returns `null` or a merchant-readable sentence — never a bare boolean.
+`canTransition()` is `reasonAgainst() === null` and `availableTransitions()` filters on it, so
+the UI, the API error and the guard share one source of truth. Sentences under test:
+
+- *"This order has already shipped. Record a return instead of cancelling it."*
+- *"This order has not shipped yet, so it cannot be returned. Cancel it instead."*
+- *"This order is not COD and is not fully paid, so it cannot ship. Mark it COD or record the payment first."*
+- *"Only MYR 50.00 of MYR 200.00 has been received, so this order is not fully paid."*
+- *"This order is On hold. Clear the exception before moving fulfilment on."*
+- *"An order that is draft cannot become shipped."*
+
+### The OMS defect we did not inherit
+
+OMS records **P1-25**: nothing tied `paid_cents` to `payment_status`, so the machine could set
+`Paid` with zero received. Here the machine **refuses** `Paid` while `paid_amount < total`, and
+`OrderService::recordPayment()` derives the status from the money rather than setting it
+directly. Status can never contradict the money.
+
+### Optimistic locking proven under real concurrency
+
+`transition()` takes `lockForUpdate()` and re-checks the from-state inside the transaction.
+Six concurrent processes racing the same `draft → pending` transition produce **exactly one
+`APPLIED`, five `REFUSED`, and exactly one `order_events` row**.
+
+**Anti-tautology proof:** removing the lock and the re-check failed on **3 of 3 runs**.
+
+### Cost snapshotting — the input Q-18 depends on
+
+Every order line freezes `unit_cost` at sale alongside `unit_price`, plus the full
+`price_basis` decomposition as JSONB. `OrderItem::marginAtSale()` computes margin from
+cost-as-at-sale, never today's cost. **This is the number ADR-009 turns into commission**, which
+is why Q-18 (is the client's landed cost real?) is now the highest-value open question.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P3-1 | **No order UI.** Service, state machine, policy and events exist; no controllers or screens |
+| P3-2 | **Quotation → SO → DO → Invoice** chain is not built. Orders and payments are; quotations, delivery orders, invoices and credit notes are not |
+| P3-3 | `quantity_allocated/picked/shipped/returned` columns exist on lines but nothing writes them yet — partial fulfilment lands with Inventory in P4 |
+| P3-4 | Stock is not reserved on allocation. The fulfilment axis moves freely through `allocated`; the reservation hook belongs to P4 |
+| P3-5 | Tax is captured per line but always `0` — the `TaxRate` on a product is not yet applied by `OrderService` |
+| P3-6 | `payments` has no allocation table; one payment belongs to one order. Multi-order settlement is a P7 concern |

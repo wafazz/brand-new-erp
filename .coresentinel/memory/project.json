@@ -116,6 +116,15 @@
       "source": "php -r get_debug_type probe against both models",
       "created_at": "2026-08-15 14:26:19",
       "last_verified": "2026-08-15 14:26:19"
+    },
+    {
+      "id": "MEM-6c04bafc2e",
+      "fact": "P3 ORDER DESIGN (Brand New ERP): three independent status axes ported from SaaS-OMS ADR-06 and extended. payment_status unpaid/partially_paid/paid/refunded; fulfilment_status draft/pending/approved/allocated/picked/packed/shipped/delivered/completed; exception_status none/on_hold/cancelled/returned. Each enum owns allowedNext(); OrderStateMachine owns the cross-axis rules. FIXED the known OMS defect P1-25: the machine refuses PaymentStatus::Paid while paid_amount < total, so status can never contradict the money. Status columns and money totals are both excluded from Order fillable; the state machine is the sole status writer and OrderService the sole money writer, both enforced by architecture tests proven with planted violations",
+      "confidence": 0.98,
+      "classification": "Known (Empirically Verified)",
+      "source": "Implemented and tested in Brand New ERP P3; 499 tests green",
+      "created_at": "2026-08-15 15:18:48",
+      "last_verified": "2026-08-15 15:18:48"
     }
   ]
 }
