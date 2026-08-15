@@ -51,7 +51,7 @@ class Order extends Model implements Scopeable
     ];
 
     protected $fillable = [
-        'branch_id', 'customer_id', 'owner_user_id', 'order_number', 'is_cod',
+        'branch_id', 'pos_session_id', 'customer_id', 'owner_user_id', 'order_number', 'is_cod',
         'customer_name', 'customer_phone', 'customer_email',
         'ship_line1', 'ship_line2', 'ship_city', 'ship_postcode', 'ship_state', 'ship_country',
         'currency', 'placed_at', 'notes',

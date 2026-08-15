@@ -9,6 +9,7 @@ use App\Enums\ExceptionStatus;
 use App\Enums\FulfilmentStatus;
 use App\Events\OrderStatusChanged;
 use App\Models\Order;
+use App\Models\PosSession;
 use App\Models\StockReservation;
 use App\Models\Warehouse;
 
@@ -83,6 +84,14 @@ class SyncStockWithFulfilment
 
     private function warehouseFor(Order $order): ?Warehouse
     {
+        if ($order->pos_session_id !== null) {
+            $register = PosSession::query()->whereKey($order->pos_session_id)->first()?->register;
+
+            if ($register?->warehouse !== null) {
+                return $register->warehouse;
+            }
+        }
+
         return Warehouse::query()
             ->where('is_active', true)
             ->when($order->branch_id !== null, fn ($q) => $q->where('branch_id', $order->branch_id))

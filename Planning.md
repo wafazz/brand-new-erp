@@ -1494,7 +1494,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes                                                                                                                                                         | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
 | **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, exports                                                                                                                                                                                     | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
 | **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
-| **P10**  | Optional modules        | HR, Payroll, POS, CRM, Projects, Assets, Tickets, Subscriptions                                                                                                                                                                        | Per module                                                                                                                                                                                    |
+| **P10 ~** | Optional modules       | HR, Payroll, **POS ✔**, CRM, Projects, Assets, Tickets, Subscriptions                                                                                                                                                                  | Per module. POS closed — see Appendix V                                                                                                                                                       |
 
 **Hard scope gate:** no work past P4 until one real SME is using P0–P4. Adopted from SMEOS's
 Sage veto, which is the most valuable governance rule in that document.
@@ -3104,3 +3104,109 @@ CoreSentinel failures layer during P0, encountered again from the opposite direc
 | U-1 ✔ | ~~A green run is still outstanding~~ **CLOSED** — run 31887436160 on `9a40f85` is green across all three jobs. Five runs, five defects, none of them a logic error |
 | U-2 | PHP 8.3 is no longer supported. Dropping the Symfony 8 packages would restore it, if that ever matters to a deployment target |
 | U-3 | No coverage reporting, no static analysis of the frontend beyond `tsc`, and CI does not run the Concurrency suite's multi-process tests under load |
+
+
+---
+
+## Appendix V — P10 begins: point of sale (2026-08-15)
+
+### The scope gate was crossed knowingly
+
+`§44` carries a hard rule: *no work past P4 until one real SME is using P0–P4.* Nobody has used any
+screen to do a day's work, so starting P10 crosses it. **This was raised, and the decision to
+proceed was taken deliberately** — recorded here so a later reader does not mistake it for an
+oversight.
+
+### The decision that shaped everything else
+
+**A POS sale is an Order.** Not a parallel entity, not a lightweight receipt table.
+
+Had the till written its own records, stock, commission, attribution, margin and every report would
+have forked into two truths that drift apart within a week. Instead `PosService` calls the same
+`OrderService` the sales screen does, and walks the result through the same `OrderStateMachine`:
+draft → pending → approved → allocated → picked → packed → shipped → delivered → completed.
+
+That is eight transitions for a two-second counter sale, and it writes eight `order_events`. The
+cost is noise in the timeline. The benefit is that a counter sale is indistinguishable from any
+other order to every downstream consumer — proven by a test asserting a POS sale produces an
+attribution row crediting the cashier as closer.
+
+### D-15: the till decremented stock twice
+
+The first implementation moved stock itself, then walked the order through the state machine.
+Selling 2 units removed 4.
+
+`SyncStockWithFulfilment` already reserves on `Allocated` and commits on `Shipped` — the POS path
+passes through both. This is the **second time** a duplicated listener has double-counted stock in
+this project; P4 recorded the first, when a manual `Event::listen` registered an auto-discovered
+listener twice.
+
+Fixed by deleting `moveStock()` entirely. The lesson is the one P4 already recorded and I did not
+apply: *before writing a side effect, check whether the lifecycle already produces it.*
+
+That fix exposed a second question. The listener chooses a warehouse by branch, which is wrong for a
+till — a register sells from its own shelf, not the branch default. `warehouseFor()` now prefers the
+register's warehouse when an order carries a `pos_session_id`.
+
+### D-16: a test that proved nothing, again
+
+The warehouse test gave the counter shelf the same branch as the register, so **both** the POS path
+and the branch fallback selected it. Removing the POS branch changed nothing and the test still
+passed.
+
+Rewritten so the branch warehouse and the counter shelf are different, and the fallback would
+demonstrably pick the wrong one. Only then did the planted violation fail it.
+
+Fourth occurrence of this shape. The rule stands: *a test only proves the guard it names when no
+other guard can produce the same outcome.*
+
+### What the till enforces
+
+| Rule | Where |
+|---|---|
+| One open session per register | `PosService`, plus a **partial unique index** in PostgreSQL as a second line |
+| A sale is fully tendered before goods leave | `PosService`, and independently the state machine refuses to ship an unpaid, non-COD order |
+| Change is not takings | Tenders are applied up to the amount due and no further |
+| Expected cash is derived | Float + cash sales ± till movements. **Variance is computed, never typed** |
+| Till movements are append-only | Model guard *and* a database trigger |
+| Sell only from an open session | `PosService` |
+| A cashier reaches only their own till | `visibleTo` on `PosSession`, `own` scope by default |
+
+Eleven guards, each proven by deleting it and watching the test fail.
+
+Two of those rules turned out to have a second line of defence that answered first when the primary
+was removed — the unique index caught the double session, and the state machine caught the unpaid
+ship. Both tests still failed, so both guards are proven to matter; it is worth knowing that neither
+is load-bearing alone.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` | passed |
+| `phpstan` (level 6) | no errors |
+| `tsc --noEmit` | clean |
+| `pest` | **1,562 passed / 3,052 assertions** (up from 1,501) |
+| **CI-equivalent run** | fresh database, no compiled frontend, `.env` from `.env.example` — **all 1,562 pass** |
+
+The Isolation suite grew from 1,027 to 1,060 on its own: it is reflection-driven, so the three new
+POS models were covered the moment they existed, and the suite refused to pass until each had a seed
+recipe. That is the mechanism working exactly as designed.
+
+Adding POS permissions also broke one access test in a way worth keeping: a sales manager could no
+longer create salespeople, because salespeople now hold `pos.*` and the manager did not. Rather than
+weaken the escalation rule, the manager was given the same till permissions — a sales manager who
+cannot cover the counter is not a realistic role anyway.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| V-1 | **No receipt.** Nothing prints, and there is no receipt template |
+| V-2 | **No refunds or returns at the till.** A counter mistake has to be reversed through the order screens |
+| V-3 | No held or parked sales — a sale in progress is lost if the page is left |
+| V-4 | No barcode hardware integration; the scan box is a text input that scanners can type into |
+| V-5 | No cash-drawer hardware, no receipt printer, no customer display |
+| V-6 | Eight `order_events` per counter sale. Correct, but noisy — a session that sells 200 items writes 1,600 rows |
+| V-7 | No X-report or Z-report beyond the closing variance |
+| V-8 | Still true from Appendix O: **no screen has been used by a human** |

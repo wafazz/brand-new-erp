@@ -16,8 +16,13 @@ Commission is calculated from that record, and can explain every ringgit it pays
 
 ### Selling
 
+A counter sale and a quoted order end up in the same place — **a POS sale *is* an order**, paid and
+handed over in one step. That is deliberate: if the till wrote its own records, stock, commission,
+attribution and every report would immediately fork into two truths.
+
 ```mermaid
 flowchart LR
+    POS[Counter sale] --> O
     L[Lead] -->|convert| O[Order]
     O -->|reserve stock| S[(Stock)]
     O -->|issue| I[Invoice]
@@ -128,7 +133,7 @@ endpoint with the button hidden.
 
 | Area | Screens |
 |---|---|
-| **Sales** | Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
+| **Sales** | **Point of sale** with till sessions and split tenders · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
 | **Catalogue** | Products with inline variants · Inventory with movement history and adjustments |
 | **Purchasing** | Purchase requests · Purchase orders · Goods receipts with landed cost · Supplier bills with three-way match · Approvals inbox |
 | **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates |

@@ -30,20 +30,21 @@ class PermissionRegistry
         'leads' => ['view', 'create', 'update', 'convert'],
         'commissions' => ['view', 'configure', 'approve', 'pay'],
         'marketing' => ['view', 'manage'],
+        'pos' => ['view', 'sell', 'manage'],
     ];
 
     /** @var array<string, array<int, string>> */
     private const ROLE_GRANTS = [
         'owner' => ['*'],
-        'admin' => ['reports.*', 'marketing.*', 'customers.*', 'suppliers.*', 'products.*', 'orders.*', 'invoices.*', 'payments.*', 'inventory.*', 'purchasing.*', 'leads.*', 'commissions.*', 'companies.view', 'branches.*', 'departments.*', 'users.*', 'roles.*', 'modules.*', 'audit.view'],
-        'branch_manager' => ['reports.view', 'marketing.view', 'customers.*', 'products.view', 'orders.*', 'invoices.view', 'inventory.*', 'leads.*', 'companies.view', 'branches.view', 'departments.view', 'users.view'],
-        'sales_manager' => ['reports.view', 'marketing.view', 'customers.*', 'products.view', 'orders.*', 'invoices.view', 'leads.*', 'commissions.view', 'companies.view', 'branches.view', 'users.view'],
-        'salesperson' => ['reports.view', 'companies.view', 'customers.view', 'customers.create', 'customers.update', 'products.view', 'orders.view', 'orders.create', 'orders.update', 'invoices.view', 'leads.view', 'leads.create', 'leads.update', 'leads.convert', 'commissions.view'],
+        'admin' => ['reports.*', 'marketing.*', 'pos.*', 'customers.*', 'suppliers.*', 'products.*', 'orders.*', 'invoices.*', 'payments.*', 'inventory.*', 'purchasing.*', 'leads.*', 'commissions.*', 'companies.view', 'branches.*', 'departments.*', 'users.*', 'roles.*', 'modules.*', 'audit.view'],
+        'branch_manager' => ['reports.view', 'marketing.view', 'pos.*', 'customers.*', 'products.view', 'orders.*', 'invoices.view', 'inventory.*', 'leads.*', 'companies.view', 'branches.view', 'departments.view', 'users.view'],
+        'sales_manager' => ['reports.view', 'marketing.view', 'pos.view', 'pos.sell', 'customers.*', 'products.view', 'orders.*', 'invoices.view', 'leads.*', 'commissions.view', 'companies.view', 'branches.view', 'users.view'],
+        'salesperson' => ['reports.view', 'pos.view', 'pos.sell', 'companies.view', 'customers.view', 'customers.create', 'customers.update', 'products.view', 'orders.view', 'orders.create', 'orders.update', 'invoices.view', 'leads.view', 'leads.create', 'leads.update', 'leads.convert', 'commissions.view'],
         'marketer' => ['reports.view', 'marketing.view', 'companies.view', 'customers.view', 'products.view', 'leads.*', 'commissions.view'],
         'marketing_manager' => ['reports.view', 'marketing.*', 'customers.view', 'products.view', 'leads.*', 'commissions.view', 'companies.view', 'users.view'],
         'purchaser' => ['suppliers.*', 'products.*', 'purchasing.*', 'inventory.view', 'companies.view', 'branches.view'],
-        'storekeeper' => ['products.view', 'inventory.*', 'purchasing.receive', 'orders.view', 'companies.view', 'branches.view'],
-        'accountant' => ['reports.*', 'customers.view', 'suppliers.view', 'orders.view', 'invoices.*', 'payments.*', 'commissions.view', 'commissions.approve', 'commissions.pay', 'purchasing.view', 'companies.view', 'branches.view', 'audit.view'],
+        'storekeeper' => ['pos.view', 'pos.sell', 'products.view', 'inventory.*', 'purchasing.receive', 'orders.view', 'companies.view', 'branches.view'],
+        'accountant' => ['reports.*', 'pos.view', 'customers.view', 'suppliers.view', 'orders.view', 'invoices.*', 'payments.*', 'commissions.view', 'commissions.approve', 'commissions.pay', 'purchasing.view', 'companies.view', 'branches.view', 'audit.view'],
         'staff' => ['companies.view', 'customers.view', 'products.view', 'orders.view'],
     ];
 

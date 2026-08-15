@@ -17,6 +17,7 @@ use App\Http\Controllers\Marketing\AttributionReportController;
 use App\Http\Controllers\Marketing\CampaignController;
 use App\Http\Controllers\Marketing\ChannelController;
 use App\Http\Controllers\Marketing\MarketerController;
+use App\Http\Controllers\Pos\TillController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\Purchasing\ApprovalController;
 use App\Http\Controllers\Purchasing\GoodsReceiptController;
@@ -123,6 +124,13 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::post('/campaigns/{campaign}/costs', [CampaignController::class, 'storeCost'])->name('campaigns.costs.store');
 
     Route::get('/attribution', [AttributionReportController::class, 'index'])->name('attribution.index');
+
+    Route::get('/pos', [TillController::class, 'index'])->name('pos.index');
+    Route::post('/pos/open', [TillController::class, 'open'])->name('pos.open');
+    Route::get('/pos/{session}', [TillController::class, 'show'])->name('pos.show');
+    Route::post('/pos/{session}/sell', [TillController::class, 'sell'])->name('pos.sell');
+    Route::post('/pos/{session}/cash', [TillController::class, 'cash'])->name('pos.cash');
+    Route::post('/pos/{session}/close', [TillController::class, 'close'])->name('pos.close');
 
     Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
     Route::get('/leads/create', [LeadController::class, 'create'])->name('leads.create');

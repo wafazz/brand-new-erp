@@ -61,6 +61,9 @@ use App\Models\OrderItem;
 use App\Models\Payment;
 use App\Models\Permission;
 use App\Models\PipelineStage;
+use App\Models\PosCashMovement;
+use App\Models\PosRegister;
+use App\Models\PosSession;
 use App\Models\PriceList;
 use App\Models\PriceListItem;
 use App\Models\Product;
@@ -133,6 +136,15 @@ function scopedModels(): array
 function newCustomer(string $suffix): Customer
 {
     return Customer::create(['code' => 'CU-'.$suffix, 'name' => 'Customer '.$suffix]);
+}
+
+function newPosRegister(string $suffix): PosRegister
+{
+    return PosRegister::create([
+        'warehouse_id' => Warehouse::create(['code' => 'WHR-'.$suffix, 'name' => 'Till warehouse '.$suffix])->getKey(),
+        'code' => 'REG-'.$suffix,
+        'name' => 'Register '.$suffix,
+    ]);
 }
 
 function newSupplier(string $suffix): Supplier
@@ -513,6 +525,28 @@ function seedRowFor(string $class, Company $company): Model
                 'summary' => 'Created for the isolation suite.',
             ],
             Warehouse::class => ['code' => 'WH-'.$suffix, 'name' => 'Warehouse '.$suffix],
+            PosRegister::class => [
+                'warehouse_id' => Warehouse::create(['code' => 'WHP-'.$suffix, 'name' => 'Till warehouse '.$suffix])->getKey(),
+                'code' => 'TILL-'.$suffix,
+                'name' => 'Register '.$suffix,
+            ],
+            PosSession::class => [
+                'pos_register_id' => newPosRegister($suffix)->getKey(),
+                'opened_by' => newUser($suffix.'till')->getKey(),
+                'reference' => 'TILLS-'.$suffix,
+                'opened_at' => now(),
+            ],
+            PosCashMovement::class => [
+                'pos_session_id' => PosSession::create([
+                    'pos_register_id' => newPosRegister($suffix.'m')->getKey(),
+                    'opened_by' => newUser($suffix.'tillm')->getKey(),
+                    'reference' => 'TILLM-'.$suffix,
+                    'opened_at' => now(),
+                ])->getKey(),
+                'kind' => 'cash_in',
+                'amount' => '10',
+                'reason' => 'Isolation suite',
+            ],
             PurchaseRequest::class => ['reference' => 'PR-'.$suffix],
             PurchaseRequestItem::class => [
                 'purchase_request_id' => PurchaseRequest::create(['reference' => 'PR2-'.$suffix])->getKey(),

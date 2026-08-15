@@ -13,6 +13,7 @@ class ModuleSeeder extends Seeder
     private const SHIPPED = [
         ['key' => 'dashboard', 'name' => 'Dashboard', 'icon' => 'bi-speedometer2', 'route' => 'dashboard', 'permission' => null, 'nav_group' => 'Overview', 'is_core' => true],
 
+        ['key' => 'pos', 'name' => 'Point of sale', 'icon' => 'bi-upc-scan', 'route' => 'pos.index', 'permission' => 'pos.view', 'nav_group' => 'Sales', 'is_core' => false],
         ['key' => 'customers', 'name' => 'Customers', 'icon' => 'bi-people', 'route' => 'customers.index', 'permission' => 'customers.view', 'nav_group' => 'Sales', 'is_core' => false],
         ['key' => 'leads', 'name' => 'Leads', 'icon' => 'bi-person-plus', 'route' => 'leads.index', 'permission' => 'leads.view', 'nav_group' => 'Sales', 'is_core' => false],
         ['key' => 'orders', 'name' => 'Orders', 'icon' => 'bi-receipt', 'route' => 'orders.index', 'permission' => 'orders.view', 'nav_group' => 'Sales', 'is_core' => false],
