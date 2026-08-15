@@ -13,6 +13,7 @@ use RuntimeException;
 
 /**
  * @property ?CarbonImmutable $valid_from
+ * @property ?CarbonImmutable $valid_to
  * @property int $version
  * @property string $rate_type
  */

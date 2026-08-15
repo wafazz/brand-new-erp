@@ -11,6 +11,7 @@ use App\Models\CommissionPlan;
 use App\Models\CommissionRule;
 use App\Models\CommissionRuleVersion;
 use App\Models\CommissionSource;
+use App\Models\CompanyUser;
 use App\Models\Marketer;
 use App\Models\Order;
 use App\Models\SalesTeam;
@@ -319,8 +320,23 @@ class CommissionEngine
             'sales_team' => $attribution->sales_team_id === null
                 ? null
                 : SalesTeam::query()->whereKey($attribution->sales_team_id)->first()?->manager,
+            'upline' => $this->uplineOf($attribution->salesperson_user_id),
             default => null,
         };
+    }
+
+    private function uplineOf(?string $salespersonId): ?User
+    {
+        if ($salespersonId === null) {
+            return null;
+        }
+
+        $managerId = CompanyUser::query()
+            ->where('user_id', $salespersonId)
+            ->where('is_active', true)
+            ->value('manager_id');
+
+        return $managerId === null ? null : User::query()->whereKey($managerId)->first();
     }
 
     private function ruleVersionFor(CommissionPlan $plan, Order $order): ?CommissionRuleVersion
