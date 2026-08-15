@@ -42,7 +42,7 @@ class RoleProvisioner
                     $scope = PermissionRegistry::defaultScopeFor($case);
 
                     foreach ($permissions as $permission) {
-                        RolePermissionScope::query()->updateOrCreate(
+                        RolePermissionScope::query()->firstOrCreate(
                             ['role_id' => $role->getKey(), 'permission_id' => $permission->getKey()],
                             ['scope' => $scope]
                         );
