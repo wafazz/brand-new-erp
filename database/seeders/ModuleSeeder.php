@@ -36,6 +36,8 @@ class ModuleSeeder extends Seeder
         ['key' => 'commission', 'name' => 'Commission', 'icon' => 'bi-cash-coin', 'route' => 'commissions.index', 'permission' => 'commissions.view', 'nav_group' => 'Money', 'is_core' => false],
         ['key' => 'commission_plans', 'name' => 'Commission plans', 'icon' => 'bi-diagram-3', 'route' => 'commission_plans.index', 'permission' => 'commissions.configure', 'nav_group' => 'Money', 'is_core' => false],
 
+        ['key' => 'leave', 'name' => 'Leave', 'icon' => 'bi-calendar-check', 'route' => 'leave.index', 'permission' => 'leave.view', 'nav_group' => 'People', 'is_core' => false],
+
         ['key' => 'branches', 'name' => 'Branches', 'icon' => 'bi-shop', 'route' => 'branches.index', 'permission' => 'branches.view', 'nav_group' => 'Administration', 'is_core' => true],
         ['key' => 'users', 'name' => 'People', 'icon' => 'bi-person-badge', 'route' => 'users.index', 'permission' => 'users.view', 'nav_group' => 'Administration', 'is_core' => true],
         ['key' => 'roles', 'name' => 'Roles and reach', 'icon' => 'bi-shield-lock', 'route' => 'roles.index', 'permission' => 'roles.view', 'nav_group' => 'Administration', 'is_core' => true],

@@ -1494,7 +1494,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes                                                                                                                                                         | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
 | **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, exports                                                                                                                                                                                     | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
 | **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
-| **P10 ~** | Optional modules       | HR, Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, Subscriptions                                                                                                                                                            | Per module. POS — Appendices V–AA. CRM — Appendix AB                                                                                                                                          |
+| **P10 ~** | Optional modules       | **HR ~** (leave), Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, Subscriptions                                                                                                                                              | Per module. POS — V–AA. CRM — AB. HR leave — AD                                                                                                                                               |
 
 **Hard scope gate:** no work past P4 until one real SME is using P0–P4. Adopted from SMEOS's
 Sage veto, which is the most valuable governance rule in that document.
@@ -3710,3 +3710,64 @@ wrong**, and reading them was worth more than making them pass.
 |---|---|
 | AC-1 | **No report fixture sets a fulfilment status.** Revenue reporting is validated only against orders that never left `draft`, which is not what a real order looks like. Worth correcting even without changing behaviour |
 | AC-2 | Nothing distinguishes *"draft, being typed"* from *"draft, sent to the customer and waiting"*. That distinction is what a quotation would provide |
+
+
+---
+
+## Appendix AD — HR: leave, and a balance that cannot be gamed (2026-08-16)
+
+Third P10 module. Chosen because the person record already existed —
+`CompanyUser` carries employee number, department, branch, joined date and **manager** — so leave
+needed a domain, not a foundation.
+
+### Approval by manager, not by flow
+
+`ApprovalEngine` is generic and would have worked. It was not used.
+
+Leave approval in an SME is *"your manager decides"*, and `CompanyUser.manager_id` already expresses
+that — the commission engine uses the same field for upline. Routing leave through configurable
+approval flows would have meant configuring a flow before anyone could take a day off, to express a
+rule the data already stated.
+
+`mayDecideFor()` is the whole rule: not yourself, and either their manager or a holder of
+`leave.configure`. Everything else follows from it.
+
+### The balance holds on request, not on approval
+
+Asking for leave takes the days off the balance immediately. Rejecting or withdrawing gives them
+back. Approval changes nothing about the balance — it was already spent when the request was made.
+
+That ordering is what stops the obvious game: **two requests that each fit inside the balance, but
+not together.** With the days held at approval time, both would pass validation and the second would
+overdraw. Held at request time, the second is refused. A test pins the 14 → 11 → 14 sequence across
+request and rejection.
+
+Three further rules the same reasoning produced:
+
+- **Weekends do not count.** Friday to Monday is two days, not four
+- **Overlapping requests are refused**, backed by a partial unique index for the exact-duplicate case
+- **A rejection needs a note.** The person has to know what to do next
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,650 passed / 3,396 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+Ten rules proven by planting. The Isolation suite grew by 22 on its own and **refused to pass until
+both new models had seed recipes** — the same mechanism that caught the POS models, working without
+being asked.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AD-1 | **Public holidays are not modelled.** Weekends are excluded; a Malaysian SME also needs state and federal holidays, which vary by state |
+| AD-2 | **The document requirement is recorded but not enforced.** A leave type can be marked as needing a medical certificate and nothing uploads one — the screen says so |
+| AD-3 | No half-days. Leave is whole working days only |
+| AD-4 | No leave calendar or team view — a manager cannot see who is away next week without reading requests one at a time |
+| AD-5 | Entitlement is a flat annual number. No accrual by month, no carry-forward, no pro-rating for a mid-year joiner, though `joined_at` is recorded |
+| AD-6 | **Departments still have no screen**, so the field on the People form remains an empty dropdown. Same shape as the pipeline-stage gap closed in AB |
+| AD-7 | Still true: **no screen has been used by a human** |

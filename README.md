@@ -138,6 +138,7 @@ endpoint with the button hidden.
 | **Purchasing** | Purchase requests · Purchase orders · Goods receipts with landed cost · Supplier bills with three-way match · Approvals inbox |
 | **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates |
 | **Marketing** | Channels · Campaigns with ad spend · Marketers · Attribution reports |
+| **People** | Leave requests, balances and manager approval · Leave types |
 | **Administration** | People · Roles and reach · Branches · Audit log |
 
 Navigation is built on the server — a menu entry appears only if the module is active, enabled for

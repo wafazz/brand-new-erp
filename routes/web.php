@@ -13,6 +13,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Finance\CommissionController;
 use App\Http\Controllers\Finance\CommissionPlanController;
 use App\Http\Controllers\Finance\InvoiceController;
+use App\Http\Controllers\Hr\LeaveController;
 use App\Http\Controllers\Inventory\StockController;
 use App\Http\Controllers\Marketing\AttributionReportController;
 use App\Http\Controllers\Marketing\CampaignController;
@@ -58,6 +59,13 @@ Route::middleware(['auth', 'company'])->group(function (): void {
 
     Route::get('/admin/roles', [RoleController::class, 'index'])->name('roles.index');
     Route::post('/admin/roles/{role}/scope', [RoleController::class, 'updateScope'])->name('roles.scope.update');
+
+    Route::get('/leave', [LeaveController::class, 'index'])->name('leave.index');
+    Route::post('/leave', [LeaveController::class, 'store'])->name('leave.store');
+    Route::post('/leave/{leaveRequest}/decide', [LeaveController::class, 'decide'])->name('leave.decide');
+    Route::post('/leave/{leaveRequest}/cancel', [LeaveController::class, 'cancel'])->name('leave.cancel');
+    Route::get('/leave-types', [LeaveController::class, 'types'])->name('leave_types.index');
+    Route::post('/leave-types', [LeaveController::class, 'storeType'])->name('leave_types.store');
 
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');

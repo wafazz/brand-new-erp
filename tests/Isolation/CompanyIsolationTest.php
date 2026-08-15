@@ -52,6 +52,8 @@ use App\Models\JournalEntry;
 use App\Models\JournalLine;
 use App\Models\Lead;
 use App\Models\LeadActivity;
+use App\Models\LeaveRequest;
+use App\Models\LeaveType;
 use App\Models\Marketer;
 use App\Models\MarketingTeam;
 use App\Models\Module;
@@ -525,6 +527,16 @@ function seedRowFor(string $class, Company $company): Model
                 'summary' => 'Created for the isolation suite.',
             ],
             Warehouse::class => ['code' => 'WH-'.$suffix, 'name' => 'Warehouse '.$suffix],
+            LeaveType::class => ['code' => 'LT-'.$suffix, 'name' => 'Leave type '.$suffix, 'days_per_year' => '14'],
+            LeaveRequest::class => [
+                'leave_type_id' => LeaveType::create(['code' => 'LTR-'.$suffix, 'name' => 'Leave '.$suffix])->getKey(),
+                'user_id' => newUser($suffix.'lv')->getKey(),
+                'reference' => 'LV-'.$suffix,
+                'starts_on' => now()->addWeek()->toDateString(),
+                'ends_on' => now()->addWeek()->addDay()->toDateString(),
+                'days' => '2',
+                'reason' => 'Isolation suite',
+            ],
             PosRegister::class => [
                 'warehouse_id' => Warehouse::create(['code' => 'WHP-'.$suffix, 'name' => 'Till warehouse '.$suffix])->getKey(),
                 'code' => 'TILL-'.$suffix,
