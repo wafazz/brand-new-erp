@@ -36,9 +36,13 @@ resolve_client() {
 
 mkdir -p "$OUT_DIR"
 STAMP="$(date -u +%Y%m%dT%H%M%SZ)"
-FILE="$OUT_DIR/${DB_DATABASE}-${STAMP}.dump"
+UNIQUE="$(od -An -N3 -tx1 /dev/urandom | tr -d " 
+")"
+FILE="$OUT_DIR/${DB_DATABASE}-${STAMP}-${UNIQUE}.dump"
 
 PG_DUMP="$(resolve_client pg_dump)"
+
+trap 'rm -f "$FILE"' ERR
 
 "$PG_DUMP" --format=custom --no-owner --no-privileges \
     --host="$DB_HOST" --port="$DB_PORT" --username="$DB_USERNAME" \
@@ -47,7 +51,8 @@ PG_DUMP="$(resolve_client pg_dump)"
 SIZE="$(wc -c < "$FILE" | tr -d ' ')"
 
 if [ "$SIZE" -lt 1024 ]; then
-    echo "REFUSING: dump is only ${SIZE} bytes, which is not a backup." >&2
+    rm -f "$FILE"
+    echo "REFUSING: dump was only ${SIZE} bytes, which is not a backup. The partial file has been removed." >&2
     exit 1
 fi
 

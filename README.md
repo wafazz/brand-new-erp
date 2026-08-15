@@ -106,13 +106,19 @@ seed recipe fails the suite** — that is intentional.
 
 ## Scheduled work
 
-Nothing is scheduled yet. Before production, these must be wired into the scheduler:
+All scheduled work is registered. Add the single Laravel cron entry (see
+[DEPLOYMENT.md](DEPLOYMENT.md)) and these run themselves:
 
-| Command | Purpose | Suggested cadence |
+| Command | Purpose | Cadence |
 |---|---|---|
-| `RollupService::rebuildSales()` | Dashboard figures | every 15 minutes, plus a nightly full day rebuild |
-| `RollupService::rebuildCommission()` | Commission dashboard | hourly |
-| `InventoryService::sweepExpired()` | Release expired speculative stock holds | every 5 minutes |
+| `erp:sweep-reservations` | Release expired speculative stock holds | every 5 minutes |
+| `erp:rebuild-rollups` | Dashboard figures | every 15 minutes |
+| `erp:rebuild-rollups --date=<yesterday>` | Settle the previous day | daily 02:15 |
+| `erp:backup` | Dump, prune, copy offsite | daily 02:00 |
+| `erp:verify-backup` | Restore rehearsal | Mondays 03:00 |
+
+Each is `withoutOverlapping()` and `onOneServer()`. The rollup and sweep commands iterate every
+active company and **continue past a failing one** rather than aborting the whole run.
 
 ---
 
@@ -141,17 +147,32 @@ tests/              Unit / Architecture / Isolation / Feature / Concurrency / Se
 ## Backups
 
 ```bash
-./scripts/backup.sh                          # writes storage/backups/<db>-<utc>.dump
-./scripts/restore.sh <dump-file> <target-db> # restores into a fresh database
+php artisan erp:backup           # dump, prune, copy offsite
+php artisan erp:verify-backup    # restore the latest dump and prove it is usable
+
+./scripts/backup.sh                          # the underlying dump script
+./scripts/restore.sh <dump-file> <target-db> # restore into a named database
 ```
+
+`erp:backup` runs nightly at 02:00 and `erp:verify-backup` weekly on Monday at 03:00. **The
+rehearsal is scheduled, not a one-off** — a restore verified once decays.
+
+`erp:verify-backup` restores the newest dump into a scratch database, compares table, trigger,
+CHECK and foreign-key counts against the live schema, proves the restored copy still refuses a
+journal edit, then drops the scratch database. It exits non-zero on any mismatch.
 
 Both scripts resolve a `pg_dump`/`pg_restore` whose **major version matches the running server**,
 because the client on `PATH` is frequently older and refuses outright. `backup.sh` also refuses to
 write a dump under 1 KB, so an empty file is never mistaken for a backup.
 
-**The restore has been rehearsed, not assumed.** See `Planning.md` Appendix L for the verified
-result, including confirmation that triggers, CHECK constraints and foreign keys survive the
-round-trip and that the restored database still refuses to edit the journal.
+A failed dump deletes its own partial file, so a truncated file can never be mistaken for a
+backup. Filenames carry a random suffix so two runs in the same second cannot overwrite each other.
+
+Set `BACKUP_OFFSITE_ENABLED=true` and `BACKUP_OFFSITE_COMMAND` (with `{file}` as the placeholder)
+to copy dumps off the machine. Enabling it without a command is a hard error — *a backup that lives
+only on the machine it protects is not a backup.*
+
+**The restore has been rehearsed, not assumed.** See `Planning.md` Appendix L and Appendix N.
 
 ---
 
@@ -173,5 +194,7 @@ must be built. The largest gaps:
   Customers, products, orders, inventory, purchasing, invoices and commission are service-layer only.
 - No exports.
 - No credit notes.
-- Landed cost is not apportioned into `unit_cost`, which **margin-based commission depends on**
-  (see `Planning.md` Q-18 and R-14).
+- Landed cost **is** apportioned into `average_cost`, and order lines record `unit_cost_source`.
+  What remains is a data question, not a code one: if purchase orders carry estimated prices or
+  freight invoices are never entered, the average will faithfully average wrong numbers
+  (see `Planning.md` Q-18).

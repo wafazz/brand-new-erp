@@ -23,8 +23,8 @@ Confirm the **server** version, not the client binary:
 psql -h 127.0.0.1 -p 5432 -U postgres -d postgres -tAc "select version();"
 ```
 
-This distinction has bitten this project twice. A PG14 client reports 14 while the server runs 16,
-and `pg_dump` refuses across that gap.
+This distinction has bitten this project three times, including a backup that failed outright. A
+PG14 client reports 14 while the server runs 16, and `pg_dump` refuses across that gap.
 
 ---
 
@@ -105,8 +105,9 @@ that an unauthenticated request to `/horizon` is refused.
 * * * * * cd /var/www/sme-erp && php artisan schedule:run >> /dev/null 2>&1
 ```
 
-**The scheduled jobs listed in README.md are not yet registered.** Register them before go-live, or
-dashboards will show stale figures and expired stock holds will never release.
+That single entry is all that is needed. Every job — rollups, the reservation sweep, the nightly
+backup and the weekly restore rehearsal — is already registered in `routes/console.php`. Confirm
+with `php artisan schedule:list` after deploy.
 
 ---
 
@@ -144,16 +145,28 @@ fetchable.
 
 ## 6. Backups
 
+Backups run through the scheduler, so the only cron entry needed is the Laravel one in section 4.
+
+| Command | When |
+|---|---|
+| `erp:backup` | nightly 02:00 |
+| `erp:verify-backup` | Mondays 03:00 |
+
+Set these in `.env` so dumps leave the machine:
+
 ```
-0 2 * * * cd /var/www/sme-erp && ./scripts/backup.sh /var/backups/sme-erp >> /var/log/sme-erp-backup.log 2>&1
+BACKUP_DIRECTORY=/var/backups/sme-erp
+BACKUP_KEEP_DAYS=14
+BACKUP_OFFSITE_ENABLED=true
+BACKUP_OFFSITE_COMMAND=rsync -az {file} backup@offsite.example:/srv/sme-erp/
 ```
 
-Copy dumps off the machine. A backup that lives only on the server it protects is not a backup.
+Enabling offsite without a command is a hard error, by design.
 
-**Rehearse the restore on a schedule, not only at install.** The procedure is in README.md and the
-verified result is in `Planning.md` Appendix L.
-
----
+**The weekly rehearsal is the point.** It restores the newest dump into a scratch database,
+compares table, trigger, CHECK and foreign-key counts against the live schema, proves the restored
+copy still refuses a journal edit, and exits non-zero on any mismatch. **Alert on that exit code** —
+a backup nobody has restored is a hope, not a backup.
 
 ## 7. Post-deploy verification
 
@@ -165,7 +178,7 @@ verified result is in `Planning.md` Appendix L.
 - [ ] `curl -I https://…/storage/anything` returns 404 — the private disk serves no route
 - [ ] `.env` is not fetchable over HTTP
 - [ ] `php artisan about` shows `Debug Mode: OFF` and `Environment: production`
-- [ ] A backup runs and `restore.sh` restores it into a scratch database
+- [ ] `php artisan erp:backup` writes a dump, and `php artisan erp:verify-backup` exits 0
 - [ ] Queue workers are processing (`php artisan horizon:status`)
 
 ---

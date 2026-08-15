@@ -2253,7 +2253,7 @@ known-credential account can reach production.
 | P9-1 | **External security review** — the gate's first half. Recommended before any real customer data is loaded |
 | P9-2 ✔ | ~~Nothing is scheduled~~ **CLOSED** — see Appendix M. Original: nothing is scheduled. Rollups and the reservation sweep have no scheduler entries; dashboards will go stale and expired holds will never release |
 | P9-3 | **No CI run against this suite in a real pipeline** — the workflow exists from P0 but has never executed on a runner |
-| P9-4 | Backups are not yet copied off-machine, and no restore rehearsal is scheduled |
+| P9-4 ✔ | ~~Backups not off-machine, no scheduled rehearsal~~ **CLOSED** — see Appendix N |
 | P9-5 | **The UI gap.** Nine phases of domain logic sit behind authentication, branch admin, an audit viewer and dashboards. This is not yet a system staff can operate |
 | P9-6 | Q-18 / P4-4 / R-14 — landed cost is still not apportioned, and commission depends on it |
 
@@ -2340,3 +2340,72 @@ average wrong numbers. The mechanism is now correct; the data question is still 
 
 P9-1 (external security review), P9-3 (CI never run), P9-4 (backups off-machine, scheduled
 rehearsal), P9-5 (**the UI gap**), and the 55 remaining carried-forward items.
+
+---
+
+## Appendix N — P9-4 closed: backups and a scheduled rehearsal (2026-08-15)
+
+| Gate | Result |
+|---|---|
+| Pest | **1,318 passed, 1,959 assertions** |
+| PHPStan / Pint / `tsc` | pass |
+
+### What was missing
+
+P9 proved a restore **once**, by hand. That is a demonstration, not a control — a restore verified
+once decays as the schema moves.
+
+### What exists now
+
+| Command | Cadence | What it does |
+|---|---|---|
+| `erp:backup` | nightly 02:00 | Dump, prune to `BACKUP_KEEP_DAYS`, optionally copy offsite |
+| `erp:verify-backup` | Mondays 03:00 | Restore the newest dump into a scratch database, verify it, drop it |
+
+`erp:verify-backup` compares **table, trigger, CHECK-constraint and foreign-key counts** against the
+live schema, then **proves append-only protection survived by inserting a real journal line into the
+restored copy and attempting to update it**. It exits non-zero on any mismatch, so a monitor can
+alert on it.
+
+Verified run against the live database:
+
+```
+tables 107/107 ok · triggers 11/11 ok · checks 96/96 ok · foreign_keys 273/273 ok · append-only held
+```
+
+### The verifier catches a bad backup — proven with a real one
+
+Pointed at a dump taken before the landed-cost migration, it correctly refuses:
+
+```
+tables 107/106 MISMATCH · checks 96/91 MISMATCH · foreign_keys 273/270 MISMATCH
+The restored copy does not match the original. This backup is not trustworthy.
+```
+
+Exit code 1. That is a genuine detection against a genuinely outdated artefact, not a synthetic one.
+
+### Three defects the exercise found in the backup path itself
+
+| # | Defect | Fix |
+|---|---|---|
+| B-1 | **A failed dump left a truncated file behind** — the P9 version-mismatch failure wrote a 0-byte `.dump` that sat in the directory looking like a backup | The script now removes its own partial file and says so |
+| B-2 | **Two dumps in the same second overwrote each other**, because the filename carried only second resolution | Filenames now carry a random suffix |
+| B-3 | `latest()` was non-deterministic when two files shared an mtime | Ties now break on filename, and the test asserts only what second-resolution mtimes can actually guarantee |
+
+B-1 is the one that matters: a failed backup that leaves a plausible-looking file is worse than one
+that leaves nothing.
+
+### Offsite
+
+`BACKUP_OFFSITE_ENABLED` + `BACKUP_OFFSITE_COMMAND` (with `{file}` as the placeholder) run any
+transport — rsync, `aws s3 cp`, rclone. **Enabling it without a command is a hard error**, because
+a silently-not-copying backup is the failure mode worth refusing.
+
+**Stated plainly: no real offsite destination has been exercised.** The hook is implemented and its
+guard is tested; the transport itself must be verified on the client's infrastructure.
+
+### Documentation corrected
+
+`README.md` and `DEPLOYMENT.md` carried three claims that this work made false — *"nothing is
+scheduled yet"*, *"landed cost is not apportioned"*, and *"the scheduled jobs are not yet
+registered"*. All three were corrected rather than left to age.

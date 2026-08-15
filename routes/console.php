@@ -24,3 +24,13 @@ Schedule::command('erp:rebuild-rollups', ['--date' => now()->subDay()->toDateStr
     ->dailyAt('02:15')
     ->withoutOverlapping()
     ->onOneServer();
+
+Schedule::command('erp:backup')
+    ->dailyAt('02:00')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::command('erp:verify-backup')
+    ->weeklyOn(1, '03:00')
+    ->withoutOverlapping()
+    ->onOneServer();

@@ -132,6 +132,17 @@
         "partial"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 16:59:49",
+      "entry": "Post-P9: closed two cheap blockers and the longest-standing correctness risk. P9-2 scheduled work now registered per active company with per-tenant fault isolation so one bad tenant cannot stop everyone else's dashboards. P9-3 partially closed - every CI guard executed locally and passed, and the workflow gained the two guards it was missing (private disk, scheduler registration), but it has still never run on a runner and I said so rather than claiming CI passes. P4-4 landed cost implemented, which is the gap I flagged in every report since P4: freight/duty apportioned by value, quantity or weight with the basis persisted per line, average_cost recomputed from the full receipt history so re-application is idempotent by construction, and order lines now record unit_cost_source so any margin figure can say whether it rests on a real receipt or a typed guess. Both allocation modes proven genuinely different by mutation. Important limit stated in the plan: this makes the mechanism correct but cannot make the client's input data true - Q-18 still stands. 1308 tests.",
+      "tags": [
+        "post-p9",
+        "landed-cost",
+        "scheduler",
+        "ci"
+      ],
+      "agent": "Iris"
     }
   ]
 }
