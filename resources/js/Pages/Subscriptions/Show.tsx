@@ -34,16 +34,27 @@ interface Props {
         next_invoice_on: string | null
         ends_on: string | null
         cancel_reason: string | null
+        collect_online: boolean
     }
     charges: Charge[]
-    can: { manage: boolean }
+    paymentLinks: PaymentLink[]
+    can: { manage: boolean; collect_online: boolean }
 }
 
-export default function SubscriptionShow({ subscription, charges, can }: Props) {
+interface PaymentLink {
+    invoice_id: string
+    invoice_number: string
+    status: string
+    outstanding: string
+    pay_url: string | null
+}
+
+export default function SubscriptionShow({ subscription, charges, paymentLinks, can }: Props) {
     const [cancelling, setCancelling] = useState(false)
 
     const act = useForm({})
     const cancel = useForm({ reason: '' })
+    const collect = useForm({ collect_online: !subscription.collect_online })
 
     const columns: Column<Charge>[] = [
         {
@@ -91,8 +102,56 @@ export default function SubscriptionShow({ subscription, charges, can }: Props) 
 
             <div className="d-flex flex-wrap gap-2 mb-3">
                 <StatusBadge label={subscription.status} tone={subTone(subscription.status)} />
+                {subscription.collect_online ? <StatusBadge label="Collects online" tone="success" /> : null}
                 {subscription.cancel_reason ? <span className="small text-body-secondary align-self-center">{subscription.cancel_reason}</span> : null}
             </div>
+
+            {can.collect_online ? (
+                <div className="card mb-3">
+                    <div className="card-body d-flex flex-wrap align-items-center gap-3">
+                        <div className="flex-grow-1">
+                            <div className="fw-semibold">Collect online</div>
+                            <p className="form-text mb-0">
+                                {subscription.collect_online
+                                    ? 'Every invoice this subscription raises gets a Billplz payment link overnight. Paying it settles the invoice by itself.'
+                                    : 'Invoices from this subscription are paid by bank transfer and recorded by hand.'}
+                            </p>
+                        </div>
+                        <button
+                            type="button"
+                            className={`btn btn-sm ${subscription.collect_online ? 'btn-outline-secondary' : 'btn-primary'}`}
+                            disabled={collect.processing}
+                            onClick={() => collect.post(`/subscriptions/${subscription.id}/collect-online`, { preserveScroll: true })}
+                        >
+                            {subscription.collect_online ? 'Switch off' : 'Switch on'}
+                        </button>
+                    </div>
+                </div>
+            ) : null}
+
+            {paymentLinks.some((link) => link.pay_url) ? (
+                <div className="card mb-3">
+                    <div className="card-header">Payment links</div>
+                    <ul className="list-group list-group-flush">
+                        {paymentLinks
+                            .filter((link) => link.pay_url)
+                            .map((link) => (
+                                <li key={link.invoice_id} className="list-group-item d-flex flex-wrap align-items-center gap-2">
+                                    <Link href={`/invoices/${link.invoice_id}`} className="fw-semibold">{link.invoice_number}</Link>
+                                    <span className="text-body-secondary small">{link.outstanding} outstanding</span>
+                                    <a href={link.pay_url ?? '#'} target="_blank" rel="noreferrer" className="btn btn-sm btn-outline-primary ms-auto">Open link</a>
+                                    <button
+                                        type="button"
+                                        className="btn btn-sm btn-outline-secondary"
+                                        onClick={() => void navigator.clipboard?.writeText(link.pay_url ?? '')}
+                                    >
+                                        Copy
+                                    </button>
+                                </li>
+                            ))}
+                    </ul>
+                </div>
+            ) : null}
 
             {cancelling ? (
                 <div className="card mb-3 border-danger">

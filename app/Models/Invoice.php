@@ -45,6 +45,12 @@ class Invoice extends Model implements Scopeable
         ];
     }
 
+    /** @return HasMany<PaymentIntent, $this> */
+    public function paymentIntents(): HasMany
+    {
+        return $this->hasMany(PaymentIntent::class);
+    }
+
     /** @return HasMany<InvoiceItem, $this> */
     public function items(): HasMany
     {

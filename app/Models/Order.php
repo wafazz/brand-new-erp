@@ -107,6 +107,12 @@ class Order extends Model implements Scopeable
         return $this->hasMany(Payment::class);
     }
 
+    /** @return BelongsTo<Subscription, $this> */
+    public function subscription(): BelongsTo
+    {
+        return $this->belongsTo(Subscription::class);
+    }
+
     /** @return BelongsTo<Customer, $this> */
     public function customer(): BelongsTo
     {

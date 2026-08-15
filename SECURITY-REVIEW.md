@@ -22,11 +22,11 @@ and marketing attribution, for a Malaysian company operating across multiple bra
 | Auth | Session cookie, single `web` guard, no tokens, no SSO, no 2FA |
 | Payments | Billplz (FPX/cards). Hosted payment page — **no card data ever reaches this system** |
 | Authorization | `spatie/laravel-permission` in teams mode + a custom data-scope layer |
-| Routes | 111 total, 56 state-changing (1 unauthenticated, signature-verified) |
+| Routes | 112 total, 57 state-changing (1 unauthenticated, signature-verified) |
 | Roles | 11 | 
 | Permissions | 74 |
 | Data scopes | 5 (own, team, branch, company, all) |
-| Tests | 1,720 passing / 3,557 assertions |
+| Tests | 1,743 passing / 3,623 assertions |
 
 There is no public API and no file upload. Every route requires a session except `GET|POST /login`
 and **two Billplz payment routes, which are authenticated by HMAC signature rather than by a
@@ -173,6 +173,10 @@ Specific things I would try:
 4. Racing two identical callbacks concurrently — the replay guard relies on `lockForUpdate`.
 5. Whether `settle()` can be reached with an intent belonging to company A while a session for
    company B is active.
+6. `POST /subscriptions/{id}/collect-online` decides whether a subscription raises payment links
+   unattended. It is gated on `payments.create`, deliberately **not** on `customers.update`. The
+   create form accepts the same field and ignores it without that permission — check that the two
+   paths cannot disagree.
 
 **No signature test exists for the `|` separator concern in item 1.** I flagged it rather than
 fixing it because I am not confident I know the right fix, and a wrong one would look reassuring.
@@ -210,7 +214,7 @@ Run them yourself:
 
 Every authorization guard in this codebase was verified by **planting the violation** — removing the
 check, confirming the test fails, restoring it. A green test that has never been seen to fail proves
-nothing, and this method has caught eleven defects where a test was passing for the wrong reason.
+nothing, and this method has caught twelve defects where a test was passing for the wrong reason.
 
 **It is still self-assessment.** It cannot find what I did not think to test. That is what you are
 for.

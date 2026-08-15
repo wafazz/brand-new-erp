@@ -30,6 +30,11 @@ Schedule::command('erp:bill-subscriptions')
     ->withoutOverlapping()
     ->onOneServer();
 
+Schedule::command('erp:raise-payment-links')
+    ->dailyAt('01:45')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Schedule::command('erp:backup')
     ->dailyAt('02:00')
     ->withoutOverlapping()

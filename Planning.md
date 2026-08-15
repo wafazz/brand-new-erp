@@ -4027,3 +4027,72 @@ first thing to do before this touches a real customer.
 | AG-5 | No dunning. AF-5 stands: nothing chases an unpaid invoice, and nothing surfaces which unpaid invoices are recurring revenue |
 | AG-7 | No receipt is emailed. The redirect promises one; no mail transport exists |
 | AG-8 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix AH — Payment links that attach themselves (2026-08-16)
+
+AG-4 read *"subscriptions still do not attach a payment link automatically — a recurring invoice must
+have one raised by hand."* This closes it.
+
+### The dependency I did not add
+
+The obvious build is a queued job dispatched after billing commits. This project has **no
+`ShouldQueue` anywhere** — the one listener is synchronous — so a job would have introduced a queue
+worker as a new operational requirement. If nobody ran Horizon, links would silently never appear.
+
+The scheduler is already required: subscription billing runs on cron at 01:30. A **scheduled sweep**
+at 01:45 reuses that dependency and adds nothing. It is also naturally retrying — whatever fails
+tonight is picked up tomorrow — and idempotent by construction, because it only looks at invoices
+that do not already have a pending link.
+
+Raising the bill inside the billing transaction was never an option. An HTTP call to an external
+service inside `DB::transaction` holds row locks on somebody else's latency, and a Billplz outage
+would have stopped billing itself.
+
+| Piece | What it does |
+|---|---|
+| `subscriptions.collect_online` | Opt in per subscription, default off |
+| `PaymentLinkSweeper` | Finds unpaid subscription invoices with no live link and raises one each |
+| `erp:raise-payment-links` | Runs it per company; scheduled daily at 01:45 |
+| Subscription screen | A switch, and every live link with copy buttons |
+
+The switch is gated on `payments.create`, **not** `customers.update`. Turning on automatic collection
+is a decision about taking money, not about editing a customer record, and a salesperson who may edit
+subscriptions should not be able to make it. The create form accepts the field and ignores it without
+that permission, so the form cannot be used to route around the switch's own gate.
+
+### Planting, again, and the same failure shape
+
+Five violations were planted against the sweeper. **Two survived**, both for the same reason as
+Appendix AG: a guard downstream made the guard under test invisible.
+
+- Deleting the *already-has-a-link* filter changed nothing, because `PaymentLinkService::createFor`
+  independently hands back an existing pending intent rather than raising a second bill.
+- Deleting the *paid and void* filters changed nothing, because `createFor` throws on both and the
+  sweeper catches it.
+
+In each case the guard is real, but its only observable effect is on **what the nightly run
+reports** — a log claiming to have raised links it did not raise, or reporting a failure every night
+for every invoice ever paid. The tests were rewritten to assert the reported counts rather than only
+the database state, and re-planting then failed exactly the test naming each guard.
+
+A third test was hollow for a different reason: it selected the subscription under test with
+`latest()`, and both rows were created in the same second, so it could read the fixture's row instead.
+Removing the permission check it claimed to test left it passing. Now it selects by exclusion.
+
+That is ten, eleven and twelve. The recurring shape is worth stating plainly: **a test written
+against the end state cannot tell two guards apart.** Where two guards both prevent the same
+end state, at least one test must assert something only one of them controls.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AH-1 | AG-1 still stands and now matters more: **no payment has ever been taken through Billplz.** The sweep will raise real bills the first night it runs against live credentials |
+| AH-2 | Nothing sends the link. It appears on the invoice and the subscription screen; somebody still has to give it to the customer, because no mail transport exists |
+| AH-3 | A link is raised for the full outstanding amount at sweep time. If a partial payment lands afterwards, the old link still asks for the original figure until it is paid or replaced |
+| AH-4 | No dunning. AF-5 stands — nothing chases an unpaid invoice or reports which unpaid invoices are recurring revenue |
+| AH-5 | The sweep is company-by-company and serial. With many companies and many overdue invoices, one slow Billplz response delays the rest |
+| AH-6 | Still true: **no screen has been used by a human** |

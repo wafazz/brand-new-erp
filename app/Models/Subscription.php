@@ -27,11 +27,11 @@ class Subscription extends Model implements Scopeable
     use HasUlid;
 
     /** @var array<string, mixed> */
-    protected $attributes = ['status' => 'active', 'quantity' => '1', 'currency' => 'MYR'];
+    protected $attributes = ['status' => 'active', 'quantity' => '1', 'currency' => 'MYR', 'collect_online' => false];
 
     protected $fillable = [
         'customer_id', 'subscription_plan_id', 'owner_user_id', 'reference', 'status',
-        'quantity', 'unit_price', 'currency', 'starts_on', 'next_invoice_on', 'ends_on',
+        'quantity', 'unit_price', 'currency', 'collect_online', 'starts_on', 'next_invoice_on', 'ends_on',
         'cancelled_at', 'cancel_reason',
     ];
 
@@ -41,6 +41,7 @@ class Subscription extends Model implements Scopeable
         return [
             'quantity' => 'decimal:4',
             'unit_price' => 'decimal:4',
+            'collect_online' => 'boolean',
             'starts_on' => 'immutable_date',
             'next_invoice_on' => 'immutable_date',
             'ends_on' => 'immutable_date',

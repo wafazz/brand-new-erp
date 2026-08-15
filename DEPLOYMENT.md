@@ -229,5 +229,23 @@ live:
 Only step 3 proves the signature algorithm here agrees with theirs. Until it has been done once, the
 integration is unverified — every test in the suite fakes the HTTP layer.
 
+### Automatic collection on subscriptions
+
+A subscription switched to **collect online** gets a payment link raised for every unpaid invoice it
+produces. That is a scheduled sweep, not a queued job, so it needs no queue worker — only the cron
+entry the scheduler already requires:
+
+```
+erp:bill-subscriptions   01:30    raises the invoices
+erp:raise-payment-links  01:45    raises a Billplz bill for each unpaid one
+```
+
+The sweep is idempotent: it skips any invoice that already has a live link, and any invoice that is
+paid or void. Whatever fails tonight is retried tomorrow. If Billplz is not configured it does
+nothing and says so, rather than failing the run.
+
+**Switching this on with live credentials raises real bills on the next sweep.** Prove the sandbox
+loop above first.
+
 Rotating the X-Signature key in the Billplz dashboard invalidates in-flight callbacks. Rotate it when
 nothing is outstanding, or expect to reconcile by hand.

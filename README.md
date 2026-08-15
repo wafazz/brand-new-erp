@@ -160,13 +160,18 @@ reports, while the server-to-server callback does the work.
 Settling is idempotent under a row lock, because Billplz retries. The amount credited is the smallest
 of what was billed, what the callback claims, and what is still owed.
 
+**Subscriptions can collect themselves.** Switch a subscription to collect online and every invoice it
+raises gets a payment link overnight — a scheduled sweep, not a queued job, so it needs no worker
+beyond the cron entry the scheduler already requires. Paying the link settles the invoice with nobody
+touching it.
+
 ---
 
 ## What you can actually do in it
 
 | Area | Screens |
 |---|---|
-| **Sales** | **Subscriptions** — recurring billing that raises its own invoices on a schedule · **Point of sale** — till sessions, split tenders, printable receipts, refunds · **Pipeline board** with weighted forecast and follow-ups · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
+| **Sales** | **Subscriptions** — recurring billing that raises its own invoices, and collects them online if you let it · **Point of sale** — till sessions, split tenders, printable receipts, refunds · **Pipeline board** with weighted forecast and follow-ups · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
 | **Catalogue** | Products with inline variants · Inventory with movement history and adjustments |
 | **Purchasing** | Purchase requests · Purchase orders · Goods receipts with landed cost · Supplier bills with three-way match · Approvals inbox |
 | **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates · **Online payment links** via Billplz (FPX and cards), settled automatically |
@@ -231,8 +236,8 @@ added from **Administration → People**.
 > **Upgrading:** a release that adds a permission does not reach existing companies until you run
 > `php artisan erp:sync-roles`. It leaves any data scope you have tuned alone.
 
-Scheduled work — rollups, the reservation sweep, subscription billing, nightly backups and a weekly
-restore rehearsal — needs one cron entry. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
+Scheduled work — rollups, the reservation sweep, subscription billing, payment links, nightly backups
+and a weekly restore rehearsal — needs one cron entry. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ---
 
@@ -243,7 +248,7 @@ composer gate          # Pint + PHPStan + Pest
 ./vendor/bin/pest
 ```
 
-**1,726 tests, 3,571 assertions**, in six suites that each do a different job:
+**1,743 tests, 3,623 assertions**, in six suites that each do a different job:
 
 | Suite | What it protects |
 |---|---|
@@ -259,7 +264,7 @@ composer gate          # Pint + PHPStan + Pest
 **A test that has never been seen to fail proves nothing.**
 
 Every authorization guard here was verified by deleting it, watching the test go red, and restoring
-it. That practice has caught eleven cases where a test was green for the wrong reason — almost
+it. That practice has caught twelve cases where a test was green for the wrong reason — almost
 always because a *different* guard was doing the refusing, and a fixture chosen for convenience made
 the two indistinguishable. Green suites are not evidence; falsified ones
 are.

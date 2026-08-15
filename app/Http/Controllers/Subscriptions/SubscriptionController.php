@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace App\Http\Controllers\Subscriptions;
 
+use App\Domain\Finance\InvoiceService;
+use App\Domain\Payments\BillplzClient;
 use App\Domain\Subscriptions\SubscriptionRefused;
 use App\Domain\Subscriptions\SubscriptionService;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\ProductVariant;
 use App\Models\Subscription;
@@ -25,6 +28,7 @@ class SubscriptionController extends Controller
 {
     public function __construct(
         private readonly SubscriptionService $subscriptions,
+        private readonly InvoiceService $invoices,
         private readonly AuditRecorder $recorder,
     ) {}
 
@@ -111,6 +115,7 @@ class SubscriptionController extends Controller
                 'next_invoice_on' => $subscription->next_invoice_on?->toDateString(),
                 'ends_on' => $subscription->ends_on?->toDateString(),
                 'cancel_reason' => $subscription->cancel_reason,
+                'collect_online' => $subscription->collect_online,
             ],
             'charges' => Order::query()
                 ->where('subscription_id', $subscription->getKey())
@@ -124,8 +129,44 @@ class SubscriptionController extends Controller
                     'paid' => (string) $order->paid_amount,
                     'currency' => $order->currency,
                 ])->all(),
-            'can' => ['manage' => $request->user()->can('customers.update')],
+            'can' => [
+                'manage' => $request->user()->can('customers.update'),
+                'collect_online' => $request->user()->can('payments.create')
+                    && app(BillplzClient::class)->configured(),
+            ],
+            'paymentLinks' => Invoice::query()
+                ->whereHas('order', fn ($query) => $query->where('subscription_id', $subscription->getKey()))
+                ->with(['paymentIntents' => fn ($query) => $query->where('status', 'pending')->latest()])
+                ->orderByDesc('issued_at')
+                ->get()
+                ->map(fn (Invoice $invoice): array => [
+                    'invoice_id' => $invoice->getKey(),
+                    'invoice_number' => $invoice->invoice_number,
+                    'status' => $invoice->status,
+                    'outstanding' => $this->invoices->outstanding($invoice)->toDecimal(),
+                    'pay_url' => $invoice->paymentIntents->first()?->pay_url,
+                ])->all(),
         ]);
+    }
+
+    public function collectOnline(Request $request, Subscription $subscription): RedirectResponse
+    {
+        abort_unless($request->user()->can('payments.create'), 403);
+
+        $data = $request->validate(['collect_online' => ['required', 'boolean']]);
+
+        $subscription->forceFill(['collect_online' => $data['collect_online']])->save();
+
+        $this->recorder->record(
+            $data['collect_online'] ? 'collect_online_enabled' : 'collect_online_disabled',
+            'subscriptions',
+            $subscription,
+            $request->user(),
+        );
+
+        return back()->with('success', $data['collect_online']
+            ? 'Future invoices for this subscription will carry an online payment link.'
+            : 'Online collection switched off for this subscription.');
     }
 
     public function store(Request $request): RedirectResponse
@@ -139,6 +180,7 @@ class SubscriptionController extends Controller
             'subscription_plan_id' => ['required', 'string', Rule::exists('subscription_plans', 'id')->where('company_id', $companyId)],
             'quantity' => ['required', 'numeric', 'gt:0'],
             'starts_on' => ['required', 'date'],
+            'collect_online' => ['nullable', 'boolean'],
         ]);
 
         try {
@@ -151,6 +193,10 @@ class SubscriptionController extends Controller
             );
         } catch (SubscriptionRefused $exception) {
             return back()->with('error', $exception->getMessage());
+        }
+
+        if (($data['collect_online'] ?? false) && $request->user()->can('payments.create')) {
+            $subscription->forceFill(['collect_online' => true])->save();
         }
 
         $this->recorder->record('created', 'subscriptions', $subscription, $request->user());

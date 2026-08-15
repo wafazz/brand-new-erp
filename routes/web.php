@@ -168,6 +168,7 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::post('/subscriptions/{subscription}/pause', [SubscriptionController::class, 'pause'])->name('subscriptions.pause');
     Route::post('/subscriptions/{subscription}/resume', [SubscriptionController::class, 'resume'])->name('subscriptions.resume');
     Route::post('/subscriptions/{subscription}/cancel', [SubscriptionController::class, 'cancel'])->name('subscriptions.cancel');
+    Route::post('/subscriptions/{subscription}/collect-online', [SubscriptionController::class, 'collectOnline'])->name('subscriptions.collect_online');
 
     Route::get('/pipeline', [PipelineController::class, 'board'])->name('pipeline.index');
     Route::get('/pipeline/stages', [PipelineController::class, 'stages'])->name('pipeline.stages');
