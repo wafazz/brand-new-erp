@@ -1491,7 +1491,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P4 ✔** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
 | **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
 | **P6 ✔** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
-| **P7** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
+| **P7 ✔** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
 | **P8** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
 | **P9** | Hardening & Launch | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy | External security review clean; restore rehearsed and documented |
 | **P10** | Optional modules | HR, Payroll, POS, CRM, Projects, Assets, Tickets, Subscriptions | Per module |
@@ -2041,3 +2041,59 @@ The two-stage life works as designed: accrual is **provisional** while `costs_re
 | P6-5 | No reversal is triggered by an order being refunded or returned — the mechanism exists, the event wiring does not |
 | P6-6 | Only four of the eight strategies are implemented; tier ladders, target achievement and upline override are deliberately absent from the CHECK rather than half-built |
 | P6-7 | No UI |
+
+---
+
+## Appendix J — P7 Gate Evidence (closed 2026-08-15)
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **1,212 passed, 1,717 assertions** (Unit 63 · Architecture 10 · Isolation 983 · Feature 146 · Concurrency 10) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` | pass |
+| Schema | **103 tables** |
+
+### The two gate criteria
+
+**1. Invoice → payment → outstanding reconciles to the cent.** Three invoices totalling MYR 3,180.00, two partly settled: invoiced 3,180.00, paid 1,260.00, outstanding 1,920.00, and `invoiced − (paid + outstanding) = 0.0000` asserted exactly, not approximately.
+
+**2. Ageing buckets match the fixture.** Four invoices due 10, 45, 75 and 120 days ago land one per bucket at MYR 530.00 each across `0-30`, `31-60`, `61-90`, `90+`. A settled invoice drops out of the report entirely.
+
+### The journal is real, and balance is enforced three ways
+
+Not a cash-book with a ledger-shaped name:
+
+- the `Ledger` service refuses an unbalanced post — *"This entry does not balance: debits MYR 100.00 against credits MYR 90.00."*
+- a `CHECK` requires `total_debit = total_credit` on every entry
+- a per-line `CHECK` requires exactly one of debit or credit to be positive
+
+`journal_lines` are append-only at the database — both `UPDATE` and `DELETE` are rejected — so a correction must be a reversing entry. **`trialBalance()` is asserted zero after issue, after payment, after void and after payout.** That single assertion catches nearly every posting mistake.
+
+### CA-10 is now closed
+
+The last of the ten prior-art anti-patterns. Commission flows through the ledger properly in two steps:
+
+| Event | Entry |
+|---|---|
+| Commission becomes payable | Dr Commission Expense / Cr Commission Payable |
+| Payout is paid | Dr Commission Payable / Cr Bank |
+
+The payable account clears to zero, a `cash_flows` row is written against the same journal entry, and **the payout flips every commission to `paid`** — the exact defect (CA-5) that let AgentStockit pay the same commission twice. Both were proven by planted violation: removing the status flip fails the sweep test, and removing the ledger post fails the payable-clears test.
+
+### Also closed here
+
+**P3-2 — invoices now exist.** `issueFromOrder()` snapshots the money and lines at issue (financial truth frozen, per the recorded skill), issues sequential numbering, posts Dr AR / Cr Sales / Cr Tax, and refuses to void an invoice that has payments against it — *"Issue a credit note rather than voiding it."* Overpayment is refused rather than clamped.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P7-1 | **No UI for anything in Finance.** Invoices, journal, ageing, expenses and payouts are all service-layer |
+| P7-2 | **Credit notes are not built.** Void covers an unpaid invoice; a paid invoice needs a credit note and the message says so, but the mechanism does not exist |
+| P7-3 | Expenses and expense categories have schema, models and a chart-of-accounts link, but **no service** — nothing posts an expense to the ledger or routes it through approvals |
+| P7-4 | AR and AP are **derived** from invoices and supplier bills rather than stored as separate tables. Deliberate, but it means there is no aged-payables report yet — only aged receivables |
+| P7-5 | Supplier bill payment does not post to the ledger; only sales and commission do |
+| P7-6 | Bank reconciliation, opening balances and period close are absent |
+| P7-7 | Q-18 / P4-4 remain open. The ledger is exact, but the **cost figures flowing into it are still unvalidated** |

@@ -83,6 +83,18 @@
         "marketing"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 16:06:35",
+      "entry": "P6 Commission gate CLOSED. All four criteria met and each proven by mutation: re-run is idempotent (removing the engine check now raises a UniqueConstraintViolationException rather than duplicating), reversal produces a contra entry with negated amount AND negated sources so the trail nets to zero, every commission renders its full deduction breakdown from persisted data rather than prose, and a provisional accrual is barred from payable by both the state machine and a database CHECK. Nine of the ten anti-patterns catalogued from dzi-holistik, AgentStockit and SAAS-Agent are closed; the tenth (payout posting to the ledger) waits on Finance in P7. Found a real Postgres trap: a UNIQUE index does not fire when a participating column is NULL, so the idempotency constraint silently permitted unlimited duplicates for exactly the order-level accruals it existed to protect - fixed with UNIQUE NULLS NOT DISTINCT. Stated the Q-18 assumption on the record: this engine is only as correct as unit_cost, and P4-4 (no landed-cost allocation) is still open, so R-14 is now live rather than theoretical. 1094 tests, 94 tables.",
+      "tags": [
+        "p6",
+        "erp",
+        "gate-closed",
+        "commission",
+        "margin"
+      ],
+      "agent": "Iris"
     }
   ]
 }

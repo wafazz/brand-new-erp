@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Exceptions\CrossCompanyAccessException;
 use App\Exceptions\MissingCompanyContextException;
+use App\Models\Account;
 use App\Models\ApprovalAction;
 use App\Models\ApprovalFlow;
 use App\Models\ApprovalLevel;
@@ -11,11 +12,13 @@ use App\Models\ApprovalRequest;
 use App\Models\Attribution;
 use App\Models\AttributionTouch;
 use App\Models\AuditLog;
+use App\Models\BankAccount;
 use App\Models\Branch;
 use App\Models\Brand;
 use App\Models\BundleItem;
 use App\Models\Campaign;
 use App\Models\CampaignCost;
+use App\Models\CashFlow;
 use App\Models\Category;
 use App\Models\Channel;
 use App\Models\Commission;
@@ -37,8 +40,14 @@ use App\Models\CustomerContact;
 use App\Models\CustomerGroup;
 use App\Models\Department;
 use App\Models\DocumentSequence;
+use App\Models\Expense;
+use App\Models\ExpenseCategory;
 use App\Models\GoodsReceipt;
 use App\Models\GoodsReceiptItem;
+use App\Models\Invoice;
+use App\Models\InvoiceItem;
+use App\Models\JournalEntry;
+use App\Models\JournalLine;
 use App\Models\Lead;
 use App\Models\LeadActivity;
 use App\Models\Marketer;
@@ -335,6 +344,49 @@ function seedRowFor(string $class, Company $company): Model
             DocumentSequence::class => ['key' => 'seq-'.$suffix, 'prefix' => 'SQ'],
             Order::class => ['order_number' => 'SO-'.$suffix, 'customer_name' => 'Walk-in '.$suffix],
             Territory::class => ['code' => 'TR-'.$suffix, 'name' => 'Territory '.$suffix],
+            Invoice::class => ['invoice_number' => 'INV-'.$suffix, 'customer_name' => 'Aminah '.$suffix],
+            InvoiceItem::class => [
+                'invoice_id' => Invoice::create(['invoice_number' => 'INV2-'.$suffix, 'customer_name' => 'A'])->getKey(),
+                'sku' => 'SKU-'.$suffix,
+                'description' => 'Widget',
+                'quantity' => '1',
+                'unit_price' => '10',
+                'line_total' => '10',
+            ],
+            Account::class => ['code' => 'AC-'.$suffix, 'name' => 'Account '.$suffix, 'type' => 'asset'],
+            JournalEntry::class => [
+                'reference' => 'JE-'.$suffix,
+                'description' => 'Isolation entry',
+                'posted_at' => now(),
+            ],
+            JournalLine::class => [
+                'journal_entry_id' => JournalEntry::create([
+                    'reference' => 'JE2-'.$suffix,
+                    'description' => 'Isolation entry',
+                    'posted_at' => now(),
+                ])->getKey(),
+                'account_id' => Account::create(['code' => 'AC2-'.$suffix, 'name' => 'A', 'type' => 'asset'])->getKey(),
+                'debit' => '10',
+            ],
+            BankAccount::class => [
+                'name' => 'Main',
+                'bank_name' => 'Maybank',
+                'account_number' => 'ACC-'.$suffix,
+            ],
+            ExpenseCategory::class => ['code' => 'EC-'.$suffix, 'name' => 'Category '.$suffix],
+            Expense::class => [
+                'reference' => 'EX-'.$suffix,
+                'description' => 'Office supplies',
+                'amount' => '100',
+                'spent_on' => now()->toDateString(),
+            ],
+            CashFlow::class => [
+                'direction' => 'in',
+                'category' => 'sales',
+                'description' => 'Isolation flow',
+                'amount' => '100',
+                'occurred_on' => now()->toDateString(),
+            ],
             CommissionPlan::class => [
                 'code' => 'CPL-'.$suffix,
                 'name' => 'Plan '.$suffix,
