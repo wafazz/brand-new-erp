@@ -3202,11 +3202,80 @@ cannot cover the counter is not a realistic role anyway.
 
 | ID | Item |
 |---|---|
-| V-1 | **No receipt.** Nothing prints, and there is no receipt template |
-| V-2 | **No refunds or returns at the till.** A counter mistake has to be reversed through the order screens |
+| V-1 ✔ | ~~No receipt~~ **CLOSED** — a print-friendly receipt at `/pos/receipt/{order}`, showing tenders, change and a REFUNDED stamp |
+| V-2 ~ | ~~No refunds at the till~~ **full-sale refunds implemented** — stock back, each tender returned to its own method, commission reversed. **Part-returns are still not supported** |
 | V-3 | No held or parked sales — a sale in progress is lost if the page is left |
 | V-4 | No barcode hardware integration; the scan box is a text input that scanners can type into |
 | V-5 | No cash-drawer hardware, no receipt printer, no customer display |
 | V-6 | Eight `order_events` per counter sale. Correct, but noisy — a session that sells 200 items writes 1,600 rows |
 | V-7 | No X-report or Z-report beyond the closing variance |
 | V-8 | Still true from Appendix O: **no screen has been used by a human** |
+
+
+---
+
+## Appendix W — Making the till usable: receipts and refunds (2026-08-15)
+
+A till that cannot print a receipt and cannot correct a mistake is not a till. Appendix V shipped
+the selling half; this closes the two gaps that stopped it being run in a shop.
+
+### The refund had to be sequenced, not just implemented
+
+A refund is four things at once: goods back on the shelf, money back to the customer, commission
+un-earned, and the order marked returned. The first attempt did them in the obvious order and
+failed — **the state machine refused `Refunded` because `paid_amount` had already reached zero**:
+
+> *Nothing has been received against this order, so there is nothing to refund.*
+
+That rule is correct and worth keeping. The sequence was wrong. The order now moves to
+`Returned` and then `Refunded` **while the money is still recorded against it**, and only then are
+the negative payments written. A refund reads, in the ledger, as: this order was paid, then returned,
+then the money went back.
+
+Each tender is refunded **to the method it arrived on** — card to card, cash out of the drawer —
+so `expectedCash()` falls by the cash portion only. A split-tender sale of 60 card plus 40 cash
+reduces the drawer by 40, not 100. There is a test for exactly that.
+
+### D-17: a guard that was already redundant
+
+`receipt()` opened with `abort_if($order->pos_session_id === null, 404)`. Planting proved nothing:
+deleting it still produced a 404, because the very next line calls `firstOrFail()` on the session
+and null matches no row.
+
+The guard was dead code stating an intention the following line already enforced. **Removed.** The
+test then had to be proven against the line that actually does the work — replacing `firstOrFail()`
+with `first()` makes it fail — which is now the case.
+
+Worth naming as its own category. The previous three occurrences were tests passing because a
+*different* guard refused. This is the same shape one level down: **code passing review because a
+neighbouring line does its job for it.** Planting finds both.
+
+### What a refund enforces
+
+| Rule | Proven by planting |
+|---|---|
+| A sale is refunded once | ✔ second refund succeeded |
+| A refund needs a reason | ✔ empty reason accepted |
+| Only a sale taken at a till can be refunded at one | ✔ a web order was refunded |
+| Stock goes back on the shelf | ✔ shelf stayed short |
+| Each tender returns to its own method | ✔ no refund payments written |
+| Commission is reversed | ✔ the accrual survived |
+| Refunding needs `pos.sell`, not `pos.view` | ✔ 403 became 302 |
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,571 passed / 3,113 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| W-1 | **Part-returns are not supported.** A customer returning one of three items has to be refunded in full and re-sold, which is wrong for a real shop and is the next thing to fix here |
+| W-2 | A refund can only be taken at an open till, and returns the money to that drawer. A customer returning to a different branch has no path |
+| W-3 | The receipt prints from the browser. No hardware, no cash drawer kick, no thermal-printer formatting |
+| W-4 | No exchange flow — a return followed by a new sale is two separate transactions |
+| W-5 | Refunds are not restricted by age or supervisor approval. Any cashier can refund any till sale in full |

@@ -4,10 +4,16 @@ declare(strict_types=1);
 
 namespace App\Domain\Pos;
 
+use App\Domain\Commission\CommissionEngine;
+use App\Domain\Inventory\InventoryService;
+use App\Domain\Inventory\StockReason;
 use App\Domain\Numbering\DocumentNumberService;
 use App\Domain\Orders\OrderService;
 use App\Domain\Orders\OrderStateMachine;
+use App\Enums\ExceptionStatus;
 use App\Enums\FulfilmentStatus;
+use App\Enums\PaymentStatus;
+use App\Models\Commission;
 use App\Models\Order;
 use App\Models\Payment;
 use App\Models\PosCashMovement;
@@ -34,6 +40,8 @@ class PosService
         private readonly OrderService $orders,
         private readonly OrderStateMachine $states,
         private readonly DocumentNumberService $numbers,
+        private readonly InventoryService $inventory,
+        private readonly CommissionEngine $commissions,
     ) {}
 
     public function openSession(PosRegister $register, User $cashier, string $openingFloat): PosSession
@@ -110,6 +118,46 @@ class PosService
             $this->walkToCompleted($order->refresh(), $cashier);
 
             return $order->refresh();
+        });
+    }
+
+    public function refund(PosSession $session, Order $sale, string $reason, User $actor): Order
+    {
+        if (! $session->isOpen()) {
+            throw new TillRefused('Open a till before refunding — the money has to come out of a drawer.');
+        }
+
+        if ($sale->pos_session_id === null) {
+            throw new TillRefused('That sale was not taken at a till, so it cannot be refunded at one.');
+        }
+
+        if ($sale->exception_status === ExceptionStatus::Returned) {
+            throw new TillRefused("Sale {$sale->order_number} has already been refunded.");
+        }
+
+        if (trim($reason) === '') {
+            throw new TillRefused('A refund needs a reason. Somebody will ask about it later.');
+        }
+
+        return DB::transaction(function () use ($session, $sale, $reason, $actor): Order {
+            $locked = Order::query()->lockForUpdate()->findOrFail($sale->getKey());
+
+            if ($locked->exception_status === ExceptionStatus::Returned) {
+                throw new TillRefused('Somebody refunded this sale a moment ago.');
+            }
+
+            $this->returnStock($locked, $session, $actor);
+
+            $returned = $this->states->transition($locked->refresh(), ExceptionStatus::Returned, $actor, $reason);
+
+            if ($this->states->canTransition($returned, PaymentStatus::Refunded)) {
+                $returned = $this->states->transition($returned, PaymentStatus::Refunded, $actor, $reason);
+            }
+
+            $this->returnMoney($returned, $actor, $reason);
+            $this->reverseCommission($returned, $reason, $actor);
+
+            return $returned->refresh();
         });
     }
 
@@ -206,6 +254,64 @@ class PosService
             );
 
             $remaining = $remaining->minus($applied);
+        }
+    }
+
+    private function returnStock(Order $order, PosSession $session, User $actor): void
+    {
+        $warehouse = $session->register?->warehouse;
+
+        if ($warehouse === null) {
+            throw new TillRefused('This register has no warehouse, so nothing can be put back on the shelf.');
+        }
+
+        foreach ($order->items()->get() as $item) {
+            if ($item->product_variant_id === null) {
+                continue;
+            }
+
+            $stock = $this->inventory->lineFor($item->product_variant_id, $warehouse);
+
+            $this->inventory->receive(
+                $stock,
+                (string) $item->quantity,
+                StockReason::Returned,
+                $order,
+                $actor,
+                "Refunded at the till on {$order->order_number}.",
+            );
+        }
+    }
+
+    private function returnMoney(Order $order, User $actor, string $reason): void
+    {
+        foreach (Payment::query()->where('order_id', $order->getKey())->get() as $payment) {
+            $amount = Money::of((string) $payment->amount, $order->currency);
+
+            if ($amount->isNegative() || $amount->isZero()) {
+                continue;
+            }
+
+            $this->orders->recordPayment(
+                $order->refresh(),
+                $amount->negated()->toDecimal(),
+                (string) $payment->method,
+                "Refund of {$payment->getKey()} — {$reason}",
+                $actor,
+            );
+        }
+    }
+
+    private function reverseCommission(Order $order, string $reason, User $actor): void
+    {
+        $accrued = Commission::query()
+            ->where('order_id', $order->getKey())
+            ->whereNotIn('status', ['reversed'])
+            ->where('type', '!=', 'reversal')
+            ->get();
+
+        foreach ($accrued as $commission) {
+            $this->commissions->reverse($commission, "Sale refunded at the till: {$reason}", $actor);
         }
     }
 

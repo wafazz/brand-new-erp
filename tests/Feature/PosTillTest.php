@@ -2,11 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Domain\Commission\CommissionEngine;
 use App\Domain\Inventory\InsufficientStock;
 use App\Domain\Pos\PosService;
 use App\Domain\Pos\TillRefused;
+use App\Enums\ExceptionStatus;
 use App\Enums\FulfilmentStatus;
+use App\Enums\PaymentStatus;
 use App\Models\Attribution;
+use App\Models\Commission;
+use App\Models\CommissionPlan;
+use App\Models\CommissionRule;
+use App\Models\CommissionRuleVersion;
 use App\Models\Order;
 use App\Models\OrderEvent;
 use App\Models\Payment;
@@ -372,5 +379,128 @@ it('leaves nothing behind when a sale fails after the order is written', functio
             ->and(Payment::query()->count())->toBe(0)
             ->and(PosCashMovement::query()->count())->toBe(0)
             ->and((string) $f['stock']->fresh()?->on_hand)->toBe('1.0000');
+    });
+});
+
+it('refunds a counter sale: stock back, money out, commission reversed', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $plan = CommissionPlan::create([
+            'code' => 'STD', 'name' => 'Standard', 'strategy' => 'percentage_of_value', 'recipient_role' => 'salesperson',
+        ]);
+        $rule = CommissionRule::create([
+            'commission_plan_id' => $plan->getKey(), 'code' => 'BASE', 'name' => 'Base',
+        ]);
+        CommissionRuleVersion::create([
+            'commission_rule_id' => $rule->getKey(), 'version' => 1, 'rate_type' => 'percent',
+            'rate_value' => '10', 'valid_from' => now()->subDay(),
+        ]);
+
+        $session = till()->openSession($f['register'], $f['alice'], '100');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '2']],
+            [['method' => 'cash', 'amount' => '50']],
+            $f['alice'],
+        );
+
+        app(CommissionEngine::class)->accrueForOrder($sale->refresh(), $f['alice']);
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('18.0000')
+            ->and(till()->expectedCash($session->refresh())->toDecimal())->toBe('150.0000')
+            ->and(Commission::query()->where('status', 'pending')->count())->toBe(1);
+
+        $refunded = till()->refund($session->refresh(), $sale->refresh(), 'Wrong size', $f['alice']);
+
+        expect($refunded->exception_status)->toBe(ExceptionStatus::Returned)
+            ->and($refunded->payment_status)->toBe(PaymentStatus::Refunded)
+            ->and((string) $refunded->paid_amount)->toBe('0.0000')
+            ->and((string) $f['stock']->fresh()?->on_hand)->toBe('20.0000', 'the goods are back on the shelf')
+            ->and(till()->expectedCash($session->refresh())->toDecimal())->toBe('100.0000', 'the cash left the drawer')
+            ->and(Commission::query()->where('type', 'reversal')->count())->toBe(1)
+            ->and(Commission::query()->where('status', 'reversed')->count())->toBe(1);
+    });
+});
+
+it('refuses to refund the same sale twice', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '100');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '1']],
+            [['method' => 'cash', 'amount' => '25']],
+            $f['alice'],
+        );
+
+        till()->refund($session->refresh(), $sale->refresh(), 'Changed their mind', $f['alice']);
+
+        expect(fn () => till()->refund($session->refresh(), $sale->refresh(), 'Again', $f['alice']))
+            ->toThrow(TillRefused::class, 'already been refunded');
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('20.0000', 'stock must not come back twice');
+    });
+});
+
+it('refuses a refund with no reason', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '100');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '1']],
+            [['method' => 'cash', 'amount' => '25']],
+            $f['alice'],
+        );
+
+        expect(fn () => till()->refund($session->refresh(), $sale->refresh(), '   ', $f['alice']))
+            ->toThrow(TillRefused::class, 'needs a reason');
+
+        expect($sale->fresh()?->exception_status->value)->toBe('none');
+    });
+});
+
+it('refuses to refund a sale that was never taken at a till', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '100');
+
+        $webOrder = Order::create([
+            'order_number' => 'SO-WEB', 'customer_name' => 'Online buyer', 'placed_at' => now(),
+        ]);
+
+        expect(fn () => till()->refund($session, $webOrder, 'Wrong item', $f['alice']))
+            ->toThrow(TillRefused::class, 'not taken at a till');
+    });
+});
+
+it('refunds each tender back to the method it came in on', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '4']],
+            [['method' => 'card', 'amount' => '60'], ['method' => 'cash', 'amount' => '40']],
+            $f['alice'],
+        );
+
+        till()->refund($session->refresh(), $sale->refresh(), 'Faulty', $f['alice']);
+
+        $refunds = Payment::query()->where('order_id', $sale->getKey())->where('amount', '<', 0)->get();
+
+        expect($refunds)->toHaveCount(2)
+            ->and((string) $refunds->firstWhere('method', 'card')?->amount)->toBe('-60.0000')
+            ->and((string) $refunds->firstWhere('method', 'cash')?->amount)->toBe('-40.0000')
+            ->and(till()->expectedCash($session->refresh())->toDecimal())->toBe('0.0000', 'only the cash half leaves the drawer');
     });
 });

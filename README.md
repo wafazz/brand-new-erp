@@ -133,7 +133,7 @@ endpoint with the button hidden.
 
 | Area | Screens |
 |---|---|
-| **Sales** | **Point of sale** with till sessions and split tenders · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
+| **Sales** | **Point of sale** — till sessions, split tenders, printable receipts, refunds · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
 | **Catalogue** | Products with inline variants · Inventory with movement history and adjustments |
 | **Purchasing** | Purchase requests · Purchase orders · Goods receipts with landed cost · Supplier bills with three-way match · Approvals inbox |
 | **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates |

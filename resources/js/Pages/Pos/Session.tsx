@@ -26,6 +26,7 @@ interface Sale {
     total: string
     currency: string
     placed_at: string | null
+    refunded: boolean
 }
 
 interface Movement {
@@ -77,6 +78,7 @@ export default function PosSessionScreen({ session, variants, customers, sales, 
     })
     const cash = useForm({ kind: 'cash_out', amount: '', reason: '' })
     const closing = useForm({ counted_cash: '', closing_note: '' })
+    const refund = useForm({ order_id: '', reason: '' })
 
     const open = session.status === 'open'
 
@@ -408,9 +410,60 @@ export default function PosSessionScreen({ session, variants, customers, sales, 
                         <div className="card-body p-0">
                             <ul className="list-group list-group-flush">
                                 {sales.map((row) => (
-                                    <li key={row.id} className="list-group-item d-flex justify-content-between">
-                                        <Link href={`/orders/${row.id}`} className="font-monospace small text-decoration-none">{row.order_number}</Link>
-                                        <span><span className="small text-body-secondary me-3">{row.placed_at}</span><MoneyText amount={row.total} currency={row.currency} /></span>
+                                    <li key={row.id} className="list-group-item">
+                                        <div className="d-flex justify-content-between align-items-center">
+                                            <span>
+                                                <Link href={`/pos/receipt/${row.id}`} className="font-monospace small text-decoration-none">{row.order_number}</Link>
+                                                {row.refunded ? <span className="ms-2"><StatusBadge label="refunded" tone="danger" /></span> : null}
+                                            </span>
+                                            <span className="d-flex align-items-center gap-2">
+                                                <span className="small text-body-secondary">{row.placed_at}</span>
+                                                <MoneyText amount={row.total} currency={row.currency} />
+                                                {open && can.sell && !row.refunded ? (
+                                                    <button
+                                                        type="button"
+                                                        className="btn btn-sm btn-outline-danger"
+                                                        onClick={() => refund.setData('order_id', refund.data.order_id === row.id ? '' : row.id)}
+                                                    >
+                                                        Refund
+                                                    </button>
+                                                ) : null}
+                                            </span>
+                                        </div>
+
+                                        {refund.data.order_id === row.id ? (
+                                            <form
+                                                className="row g-2 align-items-end mt-2"
+                                                onSubmit={(event) => {
+                                                    event.preventDefault()
+                                                    refund.post(`/pos/${session.id}/refund`, {
+                                                        preserveScroll: true,
+                                                        onSuccess: () => refund.reset(),
+                                                    })
+                                                }}
+                                            >
+                                                <div className="col-8">
+                                                    <input
+                                                        className={`form-control form-control-sm ${refund.errors.reason ? 'is-invalid' : ''}`}
+                                                        placeholder="Why is this being refunded?"
+                                                        aria-label={`Refund reason for ${row.order_number}`}
+                                                        value={refund.data.reason}
+                                                        onChange={(e) => refund.setData('reason', e.target.value)}
+                                                    />
+                                                </div>
+                                                <div className="col-4 d-grid">
+                                                    <button type="submit" className="btn btn-sm btn-danger" disabled={refund.processing}>
+                                                        Refund in full
+                                                    </button>
+                                                </div>
+                                                <div className="col-12">
+                                                    <p className="form-text mb-0">
+                                                        Puts the goods back on the shelf, returns each tender to the method it came in on,
+                                                        and reverses any commission earned. Part-returns are not supported yet.
+                                                    </p>
+                                                </div>
+                                            </form>
+                                        ) : null}
                                     </li>
                                 ))}
                                 {sales.length === 0 ? <li className="list-group-item small text-body-secondary">Nothing sold yet.</li> : null}

@@ -6,9 +6,12 @@ namespace App\Http\Controllers\Pos;
 
 use App\Domain\Pos\PosService;
 use App\Domain\Pos\TillRefused;
+use App\Enums\ExceptionStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Company;
 use App\Models\Customer;
 use App\Models\Order;
+use App\Models\Payment;
 use App\Models\PosCashMovement;
 use App\Models\PosRegister;
 use App\Models\PosSession;
@@ -101,6 +104,7 @@ class TillController extends Controller
                     'total' => (string) $order->total,
                     'currency' => $order->currency,
                     'placed_at' => $order->placed_at?->format('H:i'),
+                    'refunded' => $order->exception_status === ExceptionStatus::Returned,
                 ])->all(),
             'movements' => PosCashMovement::query()
                 ->where('pos_session_id', $session->getKey())
@@ -185,6 +189,79 @@ class TillController extends Controller
         }
 
         return back()->with('success', "Sale {$order->order_number} — {$this->money($order->total, $order->currency)} taken.");
+    }
+
+    public function receipt(Request $request, Order $order): Response
+    {
+        abort_unless($request->user()->can('pos.view'), 403);
+
+        $session = PosSession::query()->whereKey($order->pos_session_id)->firstOrFail();
+
+        $this->authorizeSession($request, $session);
+
+        $order->loadMissing(['items', 'owner:id,name', 'branch:id,name']);
+
+        return Inertia::render('Pos/Receipt', [
+            'receipt' => [
+                'order_number' => $order->order_number,
+                'placed_at' => $order->placed_at?->toDayDateTimeString(),
+                'cashier' => $order->owner->name ?? null,
+                'branch' => $order->branch->name ?? null,
+                'register' => $session->register->name ?? null,
+                'customer_name' => $order->customer_name,
+                'currency' => $order->currency,
+                'subtotal' => (string) $order->subtotal,
+                'discount_amount' => (string) $order->discount_amount,
+                'tax_amount' => (string) $order->tax_amount,
+                'total' => (string) $order->total,
+                'refunded' => $order->exception_status === ExceptionStatus::Returned,
+            ],
+            'company' => [
+                'name' => Company::query()->whereKey(app(CompanyContext::class)->idOrFail(self::class))->value('name'),
+            ],
+            'lines' => $order->items->map(fn ($item): array => [
+                'id' => $item->getKey(),
+                'sku' => $item->sku,
+                'name' => trim((string) $item->product_name.' '.(string) $item->variant_name),
+                'quantity' => (string) $item->quantity,
+                'unit_price' => (string) $item->unit_price,
+                'line_total' => (string) $item->line_total,
+            ])->all(),
+            'tenders' => Payment::query()
+                ->where('order_id', $order->getKey())
+                ->orderBy('created_at')
+                ->get()
+                ->map(fn (Payment $payment): array => [
+                    'id' => $payment->getKey(),
+                    'method' => (string) $payment->method,
+                    'amount' => (string) $payment->amount,
+                ])->all(),
+        ]);
+    }
+
+    public function refund(Request $request, PosSession $session): RedirectResponse
+    {
+        abort_unless($request->user()->can('pos.sell'), 403);
+        $this->authorizeSession($request, $session);
+
+        $companyId = app(CompanyContext::class)->idOrFail(self::class);
+
+        $data = $request->validate([
+            'order_id' => ['required', 'string', Rule::exists('orders', 'id')->where('company_id', $companyId)],
+            'reason' => ['required', 'string', 'min:3', 'max:200'],
+        ]);
+
+        $sale = Order::query()->findOrFail($data['order_id']);
+
+        try {
+            $refunded = $this->pos->refund($session, $sale, $data['reason'], $request->user());
+        } catch (Throwable $exception) {
+            return back()->with('error', $exception->getMessage());
+        }
+
+        $this->recorder->record('till_refund', 'pos', $refunded, $request->user(), $data['reason']);
+
+        return back()->with('success', "Sale {$refunded->order_number} refunded.");
     }
 
     public function cash(Request $request, PosSession $session): RedirectResponse

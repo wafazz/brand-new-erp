@@ -129,7 +129,9 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::post('/pos/open', [TillController::class, 'open'])->name('pos.open');
     Route::get('/pos/{session}', [TillController::class, 'show'])->name('pos.show');
     Route::post('/pos/{session}/sell', [TillController::class, 'sell'])->name('pos.sell');
+    Route::post('/pos/{session}/refund', [TillController::class, 'refund'])->name('pos.refund');
     Route::post('/pos/{session}/cash', [TillController::class, 'cash'])->name('pos.cash');
+    Route::get('/pos/receipt/{order}', [TillController::class, 'receipt'])->name('pos.receipt');
     Route::post('/pos/{session}/close', [TillController::class, 'close'])->name('pos.close');
 
     Route::get('/leads', [LeadController::class, 'index'])->name('leads.index');
