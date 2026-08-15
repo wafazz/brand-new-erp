@@ -93,6 +93,8 @@ use App\Models\StockMovement;
 use App\Models\StockReservation;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
+use App\Models\Subscription;
+use App\Models\SubscriptionPlan;
 use App\Models\Supplier;
 use App\Models\SupplierAddress;
 use App\Models\SupplierBill;
@@ -527,6 +529,25 @@ function seedRowFor(string $class, Company $company): Model
                 'summary' => 'Created for the isolation suite.',
             ],
             Warehouse::class => ['code' => 'WH-'.$suffix, 'name' => 'Warehouse '.$suffix],
+            SubscriptionPlan::class => [
+                'product_variant_id' => newVariant($suffix.'sp')->getKey(),
+                'code' => 'SP-'.$suffix,
+                'name' => 'Plan '.$suffix,
+                'price' => '100',
+            ],
+            Subscription::class => [
+                'customer_id' => newCustomer($suffix.'sub')->getKey(),
+                'subscription_plan_id' => SubscriptionPlan::create([
+                    'product_variant_id' => newVariant($suffix.'sp2')->getKey(),
+                    'code' => 'SP2-'.$suffix,
+                    'name' => 'Plan2 '.$suffix,
+                    'price' => '100',
+                ])->getKey(),
+                'reference' => 'SUB-'.$suffix,
+                'unit_price' => '100',
+                'starts_on' => now()->toDateString(),
+                'next_invoice_on' => now()->toDateString(),
+            ],
             LeaveType::class => ['code' => 'LT-'.$suffix, 'name' => 'Leave type '.$suffix, 'days_per_year' => '14'],
             LeaveRequest::class => [
                 'leave_type_id' => LeaveType::create(['code' => 'LTR-'.$suffix, 'name' => 'Leave '.$suffix])->getKey(),

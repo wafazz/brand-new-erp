@@ -25,6 +25,11 @@ Schedule::command('erp:rebuild-rollups', ['--date' => now()->subDay()->toDateStr
     ->withoutOverlapping()
     ->onOneServer();
 
+Schedule::command('erp:bill-subscriptions')
+    ->dailyAt('01:30')
+    ->withoutOverlapping()
+    ->onOneServer();
+
 Schedule::command('erp:backup')
     ->dailyAt('02:00')
     ->withoutOverlapping()

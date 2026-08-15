@@ -25,6 +25,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string $currency
  * @property bool $is_cod
  * @property ?CarbonImmutable $placed_at
+ * @property ?CarbonImmutable $billing_period
  * @property bool $costs_reconciled
  */
 class Order extends Model implements Scopeable
@@ -52,7 +53,7 @@ class Order extends Model implements Scopeable
     ];
 
     protected $fillable = [
-        'branch_id', 'pos_session_id', 'customer_id', 'owner_user_id', 'order_number', 'is_cod',
+        'branch_id', 'pos_session_id', 'subscription_id', 'billing_period', 'customer_id', 'owner_user_id', 'order_number', 'is_cod',
         'customer_name', 'customer_phone', 'customer_email',
         'ship_line1', 'ship_line2', 'ship_city', 'ship_postcode', 'ship_state', 'ship_country',
         'currency', 'placed_at', 'notes',
@@ -74,6 +75,7 @@ class Order extends Model implements Scopeable
             'paid_amount' => 'decimal:4',
             'returned_amount' => 'decimal:4',
             'placed_at' => 'immutable_datetime',
+            'billing_period' => 'immutable_date',
         ];
     }
 

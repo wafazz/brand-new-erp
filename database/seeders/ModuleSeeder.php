@@ -18,6 +18,7 @@ class ModuleSeeder extends Seeder
         ['key' => 'pipeline', 'name' => 'Pipeline', 'icon' => 'bi-kanban', 'route' => 'pipeline.index', 'permission' => 'leads.view', 'nav_group' => 'Sales', 'is_core' => false],
         ['key' => 'leads', 'name' => 'Leads', 'icon' => 'bi-person-plus', 'route' => 'leads.index', 'permission' => 'leads.view', 'nav_group' => 'Sales', 'is_core' => false],
         ['key' => 'orders', 'name' => 'Orders', 'icon' => 'bi-receipt', 'route' => 'orders.index', 'permission' => 'orders.view', 'nav_group' => 'Sales', 'is_core' => false],
+        ['key' => 'subscriptions', 'name' => 'Subscriptions', 'icon' => 'bi-arrow-repeat', 'route' => 'subscriptions.index', 'permission' => 'customers.view', 'nav_group' => 'Sales', 'is_core' => false],
         ['key' => 'invoices', 'name' => 'Invoices', 'icon' => 'bi-file-earmark-text', 'route' => 'invoices.index', 'permission' => 'invoices.view', 'nav_group' => 'Sales', 'is_core' => false],
 
         ['key' => 'products', 'name' => 'Products', 'icon' => 'bi-box-seam', 'route' => 'products.index', 'permission' => 'products.view', 'nav_group' => 'Catalogue', 'is_core' => false],

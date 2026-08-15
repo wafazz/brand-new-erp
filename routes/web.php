@@ -30,6 +30,7 @@ use App\Http\Controllers\Purchasing\SupplierController;
 use App\Http\Controllers\Sales\CustomerController;
 use App\Http\Controllers\Sales\LeadController;
 use App\Http\Controllers\Sales\OrderController;
+use App\Http\Controllers\Subscriptions\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function (): void {
@@ -152,6 +153,15 @@ Route::middleware(['auth', 'company'])->group(function (): void {
     Route::put('/leads/{lead}', [LeadController::class, 'update'])->name('leads.update');
     Route::post('/leads/{lead}/contacts', [PipelineController::class, 'logContact'])->name('leads.contacts.store');
     Route::post('/leads/{lead}/stage', [PipelineController::class, 'moveStage'])->name('leads.stage.update');
+
+    Route::get('/subscriptions', [SubscriptionController::class, 'index'])->name('subscriptions.index');
+    Route::post('/subscriptions', [SubscriptionController::class, 'store'])->name('subscriptions.store');
+    Route::get('/subscription-plans', [SubscriptionController::class, 'plans'])->name('subscription_plans.index');
+    Route::post('/subscription-plans', [SubscriptionController::class, 'storePlan'])->name('subscription_plans.store');
+    Route::get('/subscriptions/{subscription}', [SubscriptionController::class, 'show'])->name('subscriptions.show');
+    Route::post('/subscriptions/{subscription}/pause', [SubscriptionController::class, 'pause'])->name('subscriptions.pause');
+    Route::post('/subscriptions/{subscription}/resume', [SubscriptionController::class, 'resume'])->name('subscriptions.resume');
+    Route::post('/subscriptions/{subscription}/cancel', [SubscriptionController::class, 'cancel'])->name('subscriptions.cancel');
 
     Route::get('/pipeline', [PipelineController::class, 'board'])->name('pipeline.index');
     Route::get('/pipeline/stages', [PipelineController::class, 'stages'])->name('pipeline.stages');
