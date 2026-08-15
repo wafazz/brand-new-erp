@@ -2258,7 +2258,7 @@ known-credential account can reach production.
 | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | P9-1   | **External security review** — the gate's first half. `SECURITY-REVIEW.md` is the scoping brief for whoever performs it; the closing procedure is section 9 of that document |
 | P9-2 ✔ | ~~Nothing is scheduled~~ **CLOSED** — see Appendix M. Original: nothing is scheduled. Rollups and the reservation sweep have no scheduler entries; dashboards will go stale and expired holds will never release |
-| P9-3   | **No CI run against this suite in a real pipeline** — the workflow exists from P0 but has never executed on a runner                                                                                             |
+| P9-3 ~ | CI now runs on GitHub Actions. Its **first execution failed**, finding two defects no local run could — see Appendix U. Green run pending |
 | P9-4 ✔ | ~~Backups not off-machine, no scheduled rehearsal~~ **CLOSED** — see Appendix N                                                                                                                                  |
 | P9-5 ✔ | ~~**The UI gap.** Nine phases of domain logic sit behind authentication, branch admin, an audit viewer and dashboards~~ **CLOSED** — Appendices O, P, Q, R and S. Sales, purchasing, access, commission and marketing all have screens; the residue is listed as P9-5b…P9-5m |
 | P9-6 ✔ | ~~Q-18 / P4-4 / R-14 — landed cost is still not apportioned~~ **CLOSED** — Appendix M implemented it; Appendix P fixed the by-weight path that had never worked. Q-18 (is the client's cost data real?) remains **their** question, not a code one |
@@ -2959,3 +2959,60 @@ That limitation is worth carrying forward on its own account.
 | T-1 | **The raw-query architecture guard is file-level, not call-site-level.** Two raw queries in one file, one scoped, passes. Tightening it means parsing rather than grepping |
 | T-2 | P9-1 still open — the brief is written, the engagement is not booked |
 | T-3 | P9-3 still open — `.github/workflows/ci.yml` has never executed on a runner, and there is no remote |
+
+
+---
+
+## Appendix U — CI ran for the first time, and failed usefully (2026-08-15)
+
+`.github/workflows/ci.yml` had existed since P0 and had never executed. On the first push to a real
+remote it ran, and **two of four jobs failed**. Both were defects that no amount of local testing
+could have surfaced, because both were caused by the local machine itself.
+
+### D-10: the test suite only ran on my computer
+
+```xml
+<env name="DB_USERNAME" value="wafazztechnology"/>
+```
+
+`phpunit.xml` hardcoded the developer's macOS account as the PostgreSQL user. Every one of the
+1,496 tests passed locally and **every one failed on the runner**, because that role does not exist
+there.
+
+The suite had been green for ten waves of work while being, in the strict sense, unportable. Nobody
+else could have run it — including the external reviewer that `SECURITY-REVIEW.md` invites, whose
+first instruction is to run the suite.
+
+Fixed by deleting the credential from `phpunit.xml` so it falls through to the environment, and
+setting `DB_USERNAME`/`DB_PASSWORD` at job level in CI. A guard now fails if either is ever pinned
+there again.
+
+### D-11: the documented PHP version could not install the project
+
+CI tested PHP 8.3 and 8.4. **8.3 failed at `composer install`** — eight Symfony packages in
+`composer.lock` require `php >=8.4.1`. `composer.json` says `^8.2`, which is true for a fresh
+resolve but false for the lock that is actually committed.
+
+`README.md` and `DEPLOYMENT.md` both promised **PHP 8.3+**, including an Nginx config pointing at
+`php8.3-fpm.sock`. Anyone following the deployment guide on 8.3 would have failed at the first
+command.
+
+Matrix pinned to 8.4; both documents corrected. A guard now reads the minimum PHP the lock file
+actually requires and fails if the CI matrix tests anything below it.
+
+### Why this matters more than the two fixes
+
+Every gate report in this document — *"1,496 passed"* — was true **on one machine**. That is a
+weaker claim than it appeared, and the difference was invisible until something else ran it.
+
+The project's own rule says a test that has never been seen to fail proves nothing. The same holds
+one level up: **a suite that has only ever run in one place has only ever proven something about
+that place.**
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| U-1 | CI has run once and failed. **A green run is still outstanding** — P9-3 does not close until one exists |
+| U-2 | PHP 8.3 is no longer supported. Dropping the Symfony 8 packages would restore it, if that ever matters to a deployment target |
+| U-3 | No coverage reporting, no static analysis of the frontend beyond `tsc`, and CI does not run the Concurrency suite's multi-process tests under load |

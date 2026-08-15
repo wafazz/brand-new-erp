@@ -182,7 +182,7 @@ php artisan serve  # terminal 2
 
 Then open `http://127.0.0.1:8000/login`.
 
-Requirements: PHP **8.3+** with `pdo_pgsql`, `bcmath` and `intl`; PostgreSQL **16** (15+ is required
+Requirements: PHP **8.4+** with `pdo_pgsql`, `bcmath` and `intl`; PostgreSQL **16** (15+ is required
 for `UNIQUE NULLS NOT DISTINCT`); Redis 7+; Node **20.19+**.
 
 **No demo accounts ship with this, deliberately.** No seeder creates a user, so no known credential

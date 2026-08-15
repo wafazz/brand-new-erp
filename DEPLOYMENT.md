@@ -1,6 +1,6 @@
 # Deployment
 
-Target: a single Linux VPS running Nginx, PHP-FPM 8.3+, PostgreSQL 16 and Redis 7.
+Target: a single Linux VPS running Nginx, PHP-FPM 8.4+, PostgreSQL 16 and Redis 7.
 
 > **Never deploy with `php artisan serve`.** It is single-threaded; one long request blocks every
 > other. Use Nginx + PHP-FPM.
@@ -10,7 +10,7 @@ Target: a single Linux VPS running Nginx, PHP-FPM 8.3+, PostgreSQL 16 and Redis 
 ## 1. Server requirements
 
 ```bash
-php -v                      # 8.3 or newer
+php -v                      # 8.4 or newer — the lock file needs it
 php -m | grep -E 'pdo_pgsql|bcmath|intl'
 psql -V                     # client
 redis-server --version      # 7+
@@ -116,7 +116,7 @@ server {
     location / { try_files $uri $uri/ /index.php?$query_string; }
 
     location ~ \.php$ {
-        fastcgi_pass unix:/var/run/php/php8.3-fpm.sock;
+        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
         fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
         include fastcgi_params;
     }
@@ -190,7 +190,7 @@ git checkout <previous-tag>
 composer install --no-dev --optimize-autoloader
 npm ci && npm run build
 php artisan config:cache && php artisan route:cache
-sudo systemctl reload php8.3-fpm
+sudo systemctl reload php8.4-fpm
 ```
 
 **Migrations are not automatically reversible in production.** Every migration has a `down()`, but
