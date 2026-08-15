@@ -3203,7 +3203,7 @@ cannot cover the counter is not a realistic role anyway.
 | ID | Item |
 |---|---|
 | V-1 ✔ | ~~No receipt~~ **CLOSED** — a print-friendly receipt at `/pos/receipt/{order}`, showing tenders, change and a REFUNDED stamp |
-| V-2 ~ | ~~No refunds at the till~~ **full-sale refunds implemented** — stock back, each tender returned to its own method, commission reversed. **Part-returns are still not supported** |
+| V-2 ✔ | ~~No refunds at the till~~ **CLOSED** — full and part returns, stock back, tenders refunded in proportion, commission adjusted by the share returned |
 | V-3 | No held or parked sales — a sale in progress is lost if the page is left |
 | V-4 | No barcode hardware integration; the scan box is a text input that scanners can type into |
 | V-5 | No cash-drawer hardware, no receipt printer, no customer display |
@@ -3274,8 +3274,77 @@ neighbouring line does its job for it.** Planting finds both.
 
 | ID | Item |
 |---|---|
-| W-1 | **Part-returns are not supported.** A customer returning one of three items has to be refunded in full and re-sold, which is wrong for a real shop and is the next thing to fix here |
+| W-1 ✔ | ~~Part-returns are not supported~~ **CLOSED** — see Appendix X |
 | W-2 | A refund can only be taken at an open till, and returns the money to that drawer. A customer returning to a different branch has no path |
 | W-3 | The receipt prints from the browser. No hardware, no cash drawer kick, no thermal-printer formatting |
 | W-4 | No exchange flow — a return followed by a new sale is two separate transactions |
 | W-5 | Refunds are not restricted by age or supervisor approval. Any cashier can refund any till sale in full |
+
+
+---
+
+## Appendix X — Part returns, and a revenue figure that had been wrong all along (2026-08-15)
+
+A shop where a customer returning one of three items must be refunded in full and re-sold is not a
+shop anyone runs. This closes it — and closing it uncovered something older.
+
+### The revenue figure was overstating every refund
+
+`order_items.quantity_returned` has existed since P3 and **had never been written by anything**.
+Reports excluded cancelled orders but not returned ones, and summed `orders.total`.
+
+So the full refunds shipped one wave earlier were **counting as revenue in every report** — sales
+rollups, campaign return-on-spend, salesperson revenue, branch revenue. A shop that sold 1,000 and
+refunded 400 would have shown 1,000.
+
+Nothing caught it because nothing asked. There was no test that a refunded sale leaves revenue, so
+the wrong number was never contradicted.
+
+Fixed at the source rather than per-report: a new `orders.returned_amount` records what came back,
+and revenue is `total - returned_amount` in the rollup service and in all four attribution revenue
+queries. `Order::outstanding()` nets it too, so a part-returned sale no longer looks like a debt.
+
+### What a part return does
+
+| | |
+|---|---|
+| Stock | only the returned quantity goes back on the register's shelf |
+| The line | `quantity_returned` accumulates; `quantity` still records what was sold |
+| Money | each original tender is refunded **in proportion**, with the remainder placed on the largest so the total is exact to the cent |
+| Commission | a negative `adjustment` entry for the returned share — the original accrual stands rather than being reversed and re-earned |
+| The order | reaches `Returned` only when the last item comes back |
+
+The proportional commission is the part worth defending. Returning a quarter of a sale writes an
+adjustment of −25% of the commission. Reversing the whole accrual would underpay; leaving it alone
+would overpay. The `adjustment` type already existed in the schema for exactly this, and it avoids
+the unique-accrual index that a re-accrual would have collided with.
+
+### Constraints that answered before the code did
+
+Two plants were caught by the database rather than by my guard:
+
+- returning more than was sold hit `order_items_returned_check`, a CHECK constraint written in P3
+- `orders_returned_not_over_total_check`, added here, refuses a `returned_amount` above the total
+
+Both tests still failed, so both guards are proven to matter. It is worth knowing that neither is
+the only thing standing there.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,578 passed / 3,156 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+Six part-return rules proven by planting; a seventh plant was refused by the edit script because its
+anchor was not unique, which is the script working as intended rather than guessing.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| X-1 | **Revenue was overstated by every refund until today.** No production data exists, so nothing needs restating — but any figure quoted from an earlier build was wrong by the value of its refunds |
+| X-2 | A part return refunds tenders proportionally. Real shops often refund cash first regardless of how it was paid; this is a policy choice the system currently makes for you |
+| X-3 | Still open from Appendix W: refunds only at an open till, to that drawer (W-2); no exchange flow (W-4); no supervisor approval or age limit on refunds (W-5) |
+| X-4 | `quantity_returned` is now written by the till only. A return recorded through the order screens still does not touch it |

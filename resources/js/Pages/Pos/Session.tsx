@@ -20,6 +20,13 @@ interface Line {
     quantity: string
 }
 
+interface SaleLine {
+    id: string
+    sku: string | null
+    name: string
+    outstanding: string
+}
+
 interface Sale {
     id: string
     order_number: string
@@ -27,6 +34,8 @@ interface Sale {
     currency: string
     placed_at: string | null
     refunded: boolean
+    returned_amount: string
+    lines: SaleLine[]
 }
 
 interface Movement {
@@ -78,7 +87,7 @@ export default function PosSessionScreen({ session, variants, customers, sales, 
     })
     const cash = useForm({ kind: 'cash_out', amount: '', reason: '' })
     const closing = useForm({ counted_cash: '', closing_note: '' })
-    const refund = useForm({ order_id: '', reason: '' })
+    const refund = useForm<{ order_id: string; reason: string; lines: { order_item_id: string; quantity: string }[] }>({ order_id: '', reason: '', lines: [] })
 
     const open = session.status === 'open'
 
@@ -414,7 +423,11 @@ export default function PosSessionScreen({ session, variants, customers, sales, 
                                         <div className="d-flex justify-content-between align-items-center">
                                             <span>
                                                 <Link href={`/pos/receipt/${row.id}`} className="font-monospace small text-decoration-none">{row.order_number}</Link>
-                                                {row.refunded ? <span className="ms-2"><StatusBadge label="refunded" tone="danger" /></span> : null}
+                                                {row.refunded ? (
+                                                    <span className="ms-2"><StatusBadge label="refunded" tone="danger" /></span>
+                                                ) : Number(row.returned_amount) > 0 ? (
+                                                    <span className="ms-2"><StatusBadge label="part returned" tone="warning" /></span>
+                                                ) : null}
                                             </span>
                                             <span className="d-flex align-items-center gap-2">
                                                 <span className="small text-body-secondary">{row.placed_at}</span>
@@ -423,7 +436,11 @@ export default function PosSessionScreen({ session, variants, customers, sales, 
                                                     <button
                                                         type="button"
                                                         className="btn btn-sm btn-outline-danger"
-                                                        onClick={() => refund.setData('order_id', refund.data.order_id === row.id ? '' : row.id)}
+                                                        onClick={() => {
+                                                            const opening = refund.data.order_id !== row.id
+                                                            refund.setData('order_id', opening ? row.id : '')
+                                                            refund.setData('lines', opening ? row.lines.map((l) => ({ order_item_id: l.id, quantity: l.outstanding })) : [])
+                                                        }}
                                                     >
                                                         Refund
                                                     </button>
@@ -442,6 +459,27 @@ export default function PosSessionScreen({ session, variants, customers, sales, 
                                                     })
                                                 }}
                                             >
+                                                <div className="col-12">
+                                                    {row.lines.map((line, li) => (
+                                                        <div key={line.id} className="d-flex justify-content-between align-items-center gap-2 mb-1">
+                                                            <span className="small">
+                                                                {line.name}
+                                                                <span className="text-body-secondary d-block font-monospace">{line.sku}</span>
+                                                            </span>
+                                                            <span className="d-flex align-items-center gap-2">
+                                                                <span className="small text-body-secondary">of {Number(line.outstanding).toFixed(0)}</span>
+                                                                <input
+                                                                    className="form-control form-control-sm text-end font-monospace"
+                                                                    style={{ width: '5rem' }}
+                                                                    inputMode="decimal"
+                                                                    aria-label={`Quantity returned for ${line.sku ?? line.name}`}
+                                                                    value={refund.data.lines[li]?.quantity ?? '0'}
+                                                                    onChange={(e) => refund.setData('lines', refund.data.lines.map((l, i) => (i === li ? { ...l, quantity: e.target.value } : l)))}
+                                                                />
+                                                            </span>
+                                                        </div>
+                                                    ))}
+                                                </div>
                                                 <div className="col-8">
                                                     <input
                                                         className={`form-control form-control-sm ${refund.errors.reason ? 'is-invalid' : ''}`}
@@ -453,13 +491,14 @@ export default function PosSessionScreen({ session, variants, customers, sales, 
                                                 </div>
                                                 <div className="col-4 d-grid">
                                                     <button type="submit" className="btn btn-sm btn-danger" disabled={refund.processing}>
-                                                        Refund in full
+                                                        Refund
                                                     </button>
                                                 </div>
                                                 <div className="col-12">
                                                     <p className="form-text mb-0">
-                                                        Puts the goods back on the shelf, returns each tender to the method it came in on,
-                                                        and reverses any commission earned. Part-returns are not supported yet.
+                                                        Return any quantity up to what the customer still has. Goods go back on the shelf,
+                                                        each tender is refunded in proportion to how it was paid, and commission is adjusted
+                                                        by the share that came back.
                                                     </p>
                                                 </div>
                                             </form>

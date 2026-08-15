@@ -318,3 +318,68 @@ it('refuses a refund from a role that may only watch', function (): void {
             ->and((string) $f['stock']->fresh()?->on_hand)->toBe('19.0000');
     });
 });
+
+it('takes a part return over HTTP and leaves the rest with the customer', function (): void {
+    $f = tillFixture('20', '25');
+
+    grant($f['company'], CompanyRole::Salesperson, 'pos.view', DataScope::Own);
+
+    $this->actingAs($f['alice'])->post('/pos/open', ['pos_register_id' => $f['register']->getKey(), 'opening_float' => '0']);
+    $session = $this->withCompany($f['company'], fn (): PosSession => PosSession::query()->firstOrFail());
+
+    $this->actingAs($f['alice'])->post("/pos/{$session->getKey()}/sell", [
+        'lines' => [['variant_id' => $f['variant']->getKey(), 'quantity' => '3']],
+        'tenders' => [['method' => 'cash', 'amount' => '75']],
+    ])->assertSessionMissing('error');
+
+    $sale = $this->withCompany($f['company'], fn (): Order => Order::query()->firstOrFail());
+    $item = $this->withCompany($f['company'], fn () => $sale->items()->firstOrFail());
+
+    $this->actingAs($f['alice'])->post("/pos/{$session->getKey()}/refund", [
+        'order_id' => $sale->getKey(),
+        'reason' => 'One was damaged',
+        'lines' => [['order_item_id' => $item->getKey(), 'quantity' => '1']],
+    ])->assertRedirect()->assertSessionMissing('error');
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        expect((string) $sale->fresh()?->returned_amount)->toBe('25.0000')
+            ->and($sale->fresh()?->exception_status->value)->toBe('none')
+            ->and((string) $f['stock']->fresh()?->on_hand)->toBe('18.0000');
+    });
+
+    $this->actingAs($f['alice'])
+        ->get("/pos/{$session->getKey()}")
+        ->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('sales.0.returned_amount', '25.0000')
+            ->where('sales.0.refunded', false)
+            ->has('sales.0.lines', 1)
+            ->where('sales.0.lines.0.outstanding', '2.0000'));
+});
+
+it('refuses a part return larger than what is left', function (): void {
+    $f = tillFixture('20', '25');
+
+    grant($f['company'], CompanyRole::Salesperson, 'pos.view', DataScope::Own);
+
+    $this->actingAs($f['alice'])->post('/pos/open', ['pos_register_id' => $f['register']->getKey(), 'opening_float' => '0']);
+    $session = $this->withCompany($f['company'], fn (): PosSession => PosSession::query()->firstOrFail());
+
+    $this->actingAs($f['alice'])->post("/pos/{$session->getKey()}/sell", [
+        'lines' => [['variant_id' => $f['variant']->getKey(), 'quantity' => '2']],
+        'tenders' => [['method' => 'cash', 'amount' => '50']],
+    ]);
+
+    $sale = $this->withCompany($f['company'], fn (): Order => Order::query()->firstOrFail());
+    $item = $this->withCompany($f['company'], fn () => $sale->items()->firstOrFail());
+
+    $this->actingAs($f['alice'])->post("/pos/{$session->getKey()}/refund", [
+        'order_id' => $sale->getKey(),
+        'reason' => 'Trying it on',
+        'lines' => [['order_item_id' => $item->getKey(), 'quantity' => '9']],
+    ])->assertRedirect()->assertSessionHas('error');
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        expect((string) $sale->fresh()?->returned_amount)->toBe('0.0000')
+            ->and((string) $f['stock']->fresh()?->on_hand)->toBe('18.0000');
+    });
+});

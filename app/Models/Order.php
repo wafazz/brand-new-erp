@@ -47,6 +47,7 @@ class Order extends Model implements Scopeable
         'shipping_amount' => '0',
         'total' => '0',
         'paid_amount' => '0',
+        'returned_amount' => '0',
         'ship_country' => 'MY',
     ];
 
@@ -71,6 +72,7 @@ class Order extends Model implements Scopeable
             'shipping_amount' => 'decimal:4',
             'total' => 'decimal:4',
             'paid_amount' => 'decimal:4',
+            'returned_amount' => 'decimal:4',
             'placed_at' => 'immutable_datetime',
         ];
     }
@@ -124,7 +126,14 @@ class Order extends Model implements Scopeable
     public function outstanding(): Money
     {
         return Money::of((string) $this->total, $this->currency)
+            ->minus(Money::of((string) $this->returned_amount, $this->currency))
             ->minus(Money::of((string) $this->paid_amount, $this->currency));
+    }
+
+    public function keptTotal(): Money
+    {
+        return Money::of((string) $this->total, $this->currency)
+            ->minus(Money::of((string) $this->returned_amount, $this->currency));
     }
 
     public function isFullyPaid(): bool

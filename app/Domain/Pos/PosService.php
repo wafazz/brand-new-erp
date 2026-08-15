@@ -121,7 +121,10 @@ class PosService
         });
     }
 
-    public function refund(PosSession $session, Order $sale, string $reason, User $actor): Order
+    /**
+     * @param  array<int, array{order_item_id: string, quantity: string}>|null  $lines
+     */
+    public function refund(PosSession $session, Order $sale, string $reason, User $actor, ?array $lines = null): Order
     {
         if (! $session->isOpen()) {
             throw new TillRefused('Open a till before refunding — the money has to come out of a drawer.');
@@ -139,25 +142,37 @@ class PosService
             throw new TillRefused('A refund needs a reason. Somebody will ask about it later.');
         }
 
-        return DB::transaction(function () use ($session, $sale, $reason, $actor): Order {
+        return DB::transaction(function () use ($session, $sale, $reason, $actor, $lines): Order {
             $locked = Order::query()->lockForUpdate()->findOrFail($sale->getKey());
 
             if ($locked->exception_status === ExceptionStatus::Returned) {
                 throw new TillRefused('Somebody refunded this sale a moment ago.');
             }
 
-            $this->returnStock($locked, $session, $actor);
+            $wanted = $this->resolveLines($locked, $lines);
+            $value = $this->returnStock($locked, $session, $actor, $wanted);
 
-            $returned = $this->states->transition($locked->refresh(), ExceptionStatus::Returned, $actor, $reason);
+            $locked->forceFill([
+                'returned_amount' => Money::of((string) $locked->returned_amount, $locked->currency)
+                    ->plus($value)
+                    ->toDecimal(),
+            ])->save();
 
-            if ($this->states->canTransition($returned, PaymentStatus::Refunded)) {
-                $returned = $this->states->transition($returned, PaymentStatus::Refunded, $actor, $reason);
+            $order = $locked->refresh();
+            $everythingBack = $this->everythingReturned($order);
+
+            if ($everythingBack) {
+                $order = $this->states->transition($order, ExceptionStatus::Returned, $actor, $reason);
+
+                if ($this->states->canTransition($order, PaymentStatus::Refunded)) {
+                    $order = $this->states->transition($order, PaymentStatus::Refunded, $actor, $reason);
+                }
             }
 
-            $this->returnMoney($returned, $actor, $reason);
-            $this->reverseCommission($returned, $reason, $actor);
+            $this->returnMoney($order, $actor, $reason, $value);
+            $this->adjustCommission($order, $reason, $actor, $value, $everythingBack);
 
-            return $returned->refresh();
+            return $order->refresh();
         });
     }
 
@@ -257,7 +272,10 @@ class PosService
         }
     }
 
-    private function returnStock(Order $order, PosSession $session, User $actor): void
+    /**
+     * @param  array<string, string>  $wanted
+     */
+    private function returnStock(Order $order, PosSession $session, User $actor, array $wanted): Money
     {
         $warehouse = $session->register?->warehouse;
 
@@ -265,53 +283,197 @@ class PosService
             throw new TillRefused('This register has no warehouse, so nothing can be put back on the shelf.');
         }
 
+        $value = Money::zero($order->currency);
+
         foreach ($order->items()->get() as $item) {
-            if ($item->product_variant_id === null) {
+            $quantity = $wanted[$item->getKey()] ?? null;
+
+            if ($quantity === null || bccomp($quantity, '0', 4) !== 1) {
                 continue;
             }
 
-            $stock = $this->inventory->lineFor($item->product_variant_id, $warehouse);
+            if ($item->product_variant_id !== null) {
+                $stock = $this->inventory->lineFor($item->product_variant_id, $warehouse);
 
-            $this->inventory->receive(
-                $stock,
-                (string) $item->quantity,
-                StockReason::Returned,
-                $order,
-                $actor,
-                "Refunded at the till on {$order->order_number}.",
+                $this->inventory->receive(
+                    $stock,
+                    $quantity,
+                    StockReason::Returned,
+                    $order,
+                    $actor,
+                    "Refunded at the till on {$order->order_number}.",
+                );
+            }
+
+            $item->forceFill([
+                'quantity_returned' => bcadd((string) $item->quantity_returned, $quantity, 4),
+            ])->save();
+
+            $value = $value->plus(
+                Money::of((string) $item->unit_price, $order->currency)->times($quantity)
             );
         }
+
+        if ($value->isZero()) {
+            throw new TillRefused('Nothing was selected to return.');
+        }
+
+        return $value;
     }
 
-    private function returnMoney(Order $order, User $actor, string $reason): void
+    /**
+     * @param  array<int, array{order_item_id: string, quantity: string}>|null  $lines
+     * @return array<string, string>
+     */
+    private function resolveLines(Order $order, ?array $lines): array
     {
-        foreach (Payment::query()->where('order_id', $order->getKey())->get() as $payment) {
-            $amount = Money::of((string) $payment->amount, $order->currency);
+        $items = $order->items()->get()->keyBy(fn ($item): string => (string) $item->getKey());
 
-            if ($amount->isNegative() || $amount->isZero()) {
+        if ($lines === null) {
+            return $items
+                ->mapWithKeys(fn ($item): array => [
+                    (string) $item->getKey() => bcsub((string) $item->quantity, (string) $item->quantity_returned, 4),
+                ])
+                ->filter(fn (string $quantity): bool => bccomp($quantity, '0', 4) === 1)
+                ->all();
+        }
+
+        $wanted = [];
+
+        foreach ($lines as $line) {
+            $item = $items->get($line['order_item_id']);
+
+            if ($item === null) {
+                throw new TillRefused('A line being returned does not belong to this sale.');
+            }
+
+            $outstanding = bcsub((string) $item->quantity, (string) $item->quantity_returned, 4);
+
+            if (bccomp($line['quantity'], $outstanding, 4) === 1) {
+                throw new TillRefused(
+                    "{$item->sku}: {$line['quantity']} was offered back but only {$outstanding} of it is still with the customer."
+                );
+            }
+
+            $wanted[(string) $item->getKey()] = $line['quantity'];
+        }
+
+        return $wanted;
+    }
+
+    private function everythingReturned(Order $order): bool
+    {
+        foreach ($order->items()->get() as $item) {
+            if (bccomp((string) $item->quantity_returned, (string) $item->quantity, 4) === -1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private function returnMoney(Order $order, User $actor, string $reason, Money $value): void
+    {
+        $tenders = Payment::query()
+            ->where('order_id', $order->getKey())
+            ->where('amount', '>', 0)
+            ->orderByDesc('amount')
+            ->get();
+
+        $taken = Money::zero($order->currency);
+
+        foreach ($tenders as $payment) {
+            $taken = $taken->plus(Money::of((string) $payment->amount, $order->currency));
+        }
+
+        if ($taken->isZero()) {
+            return;
+        }
+
+        $remaining = $value;
+        $last = $tenders->count() - 1;
+
+        foreach ($tenders as $index => $payment) {
+            $share = $index === $last
+                ? $remaining
+                : Money::of(bcdiv(
+                    bcmul($value->toDecimal(), (string) $payment->amount, 8),
+                    $taken->toDecimal(),
+                    4
+                ), $order->currency);
+
+            if ($share->isZero()) {
                 continue;
             }
 
             $this->orders->recordPayment(
                 $order->refresh(),
-                $amount->negated()->toDecimal(),
+                $share->negated()->toDecimal(),
                 (string) $payment->method,
                 "Refund of {$payment->getKey()} — {$reason}",
                 $actor,
             );
+
+            $remaining = $remaining->minus($share);
         }
     }
 
-    private function reverseCommission(Order $order, string $reason, User $actor): void
+    private function adjustCommission(Order $order, string $reason, User $actor, Money $value, bool $everythingBack): void
     {
         $accrued = Commission::query()
             ->where('order_id', $order->getKey())
             ->whereNotIn('status', ['reversed'])
             ->where('type', '!=', 'reversal')
+            ->where('type', '!=', 'adjustment')
             ->get();
 
+        $sold = Money::of((string) $order->total, $order->currency);
+
         foreach ($accrued as $commission) {
-            $this->commissions->reverse($commission, "Sale refunded at the till: {$reason}", $actor);
+            if ($everythingBack) {
+                $this->commissions->reverse($commission, "Sale refunded at the till: {$reason}", $actor);
+
+                continue;
+            }
+
+            if ($sold->isZero()) {
+                continue;
+            }
+
+            $share = Money::of(bcdiv(
+                bcmul((string) $commission->amount, $value->toDecimal(), 8),
+                $sold->toDecimal(),
+                4
+            ), (string) $commission->currency);
+
+            if ($share->isZero()) {
+                continue;
+            }
+
+            Commission::create([
+                'order_id' => $order->getKey(),
+                'recipient_user_id' => $commission->recipient_user_id,
+                'recipient_role' => $commission->recipient_role,
+                'commission_plan_id' => $commission->commission_plan_id,
+                'commission_rule_id' => $commission->commission_rule_id,
+                'commission_rule_version_id' => $commission->commission_rule_version_id,
+                'reverses_commission_id' => $commission->getKey(),
+                'type' => 'adjustment',
+                'status' => 'approved',
+                'is_provisional' => false,
+                'period' => now()->format('Y-m'),
+                'currency' => $commission->currency,
+                'basis_amount' => $value->toDecimal(),
+                'rate_type' => $commission->rate_type,
+                'rate_applied' => (string) $commission->rate_applied,
+                'amount' => $share->negated()->toDecimal(),
+                'calc_inputs' => [
+                    'part_return_of' => $commission->getKey(),
+                    'returned_value' => $value->toDecimal(),
+                    'sale_total' => $sold->toDecimal(),
+                    'reason' => $reason,
+                ],
+            ]);
         }
     }
 

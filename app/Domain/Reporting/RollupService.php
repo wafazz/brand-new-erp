@@ -62,7 +62,7 @@ class RollupService
                 ->joinSub(
                     DB::table('orders')
                         ->where('company_id', $companyId)
-                        ->select('id', DB::raw('(subtotal - discount_amount) as revenue'), DB::raw('tax_amount as tax')),
+                        ->select('id', DB::raw('(subtotal - discount_amount - returned_amount) as revenue'), DB::raw('tax_amount as tax')),
                     'distinct_order',
                     'distinct_order.id',
                     '=',

@@ -95,6 +95,7 @@ class TillController extends Controller
                 ->all(),
             'sales' => Order::query()
                 ->where('pos_session_id', $session->getKey())
+                ->with('items')
                 ->orderByDesc('placed_at')
                 ->limit(25)
                 ->get()
@@ -105,6 +106,13 @@ class TillController extends Controller
                     'currency' => $order->currency,
                     'placed_at' => $order->placed_at?->format('H:i'),
                     'refunded' => $order->exception_status === ExceptionStatus::Returned,
+                    'returned_amount' => (string) $order->returned_amount,
+                    'lines' => $order->items->map(fn ($item): array => [
+                        'id' => $item->getKey(),
+                        'sku' => $item->sku,
+                        'name' => trim((string) $item->product_name.' '.(string) $item->variant_name),
+                        'outstanding' => bcsub((string) $item->quantity, (string) $item->quantity_returned, 4),
+                    ])->all(),
                 ])->all(),
             'movements' => PosCashMovement::query()
                 ->where('pos_session_id', $session->getKey())
@@ -249,12 +257,25 @@ class TillController extends Controller
         $data = $request->validate([
             'order_id' => ['required', 'string', Rule::exists('orders', 'id')->where('company_id', $companyId)],
             'reason' => ['required', 'string', 'min:3', 'max:200'],
+            'lines' => ['nullable', 'array'],
+            'lines.*.order_item_id' => ['required', 'string', Rule::exists('order_items', 'id')->where('company_id', $companyId)],
+            'lines.*.quantity' => ['required', 'numeric', 'gte:0'],
         ]);
 
         $sale = Order::query()->findOrFail($data['order_id']);
 
+        $lines = isset($data['lines'])
+            ? array_values(array_filter(
+                array_map(
+                    static fn (array $l): array => ['order_item_id' => $l['order_item_id'], 'quantity' => (string) $l['quantity']],
+                    $data['lines']
+                ),
+                static fn (array $l): bool => bccomp($l['quantity'], '0', 4) === 1
+            ))
+            : null;
+
         try {
-            $refunded = $this->pos->refund($session, $sale, $data['reason'], $request->user());
+            $refunded = $this->pos->refund($session, $sale, $data['reason'], $request->user(), $lines);
         } catch (Throwable $exception) {
             return back()->with('error', $exception->getMessage());
         }

@@ -6,6 +6,7 @@ use App\Domain\Commission\CommissionEngine;
 use App\Domain\Inventory\InsufficientStock;
 use App\Domain\Pos\PosService;
 use App\Domain\Pos\TillRefused;
+use App\Domain\Reporting\RollupService;
 use App\Enums\ExceptionStatus;
 use App\Enums\FulfilmentStatus;
 use App\Enums\PaymentStatus;
@@ -22,6 +23,7 @@ use App\Models\PosRegister;
 use App\Models\PosSession;
 use App\Models\Product;
 use App\Models\ProductVariant;
+use App\Models\SalesRollup;
 use App\Models\Stock;
 use App\Models\Warehouse;
 use Database\Seeders\ModuleSeeder;
@@ -502,5 +504,163 @@ it('refunds each tender back to the method it came in on', function (): void {
             ->and((string) $refunds->firstWhere('method', 'card')?->amount)->toBe('-60.0000')
             ->and((string) $refunds->firstWhere('method', 'cash')?->amount)->toBe('-40.0000')
             ->and(till()->expectedCash($session->refresh())->toDecimal())->toBe('0.0000', 'only the cash half leaves the drawer');
+    });
+});
+
+it('returns one line of three and leaves the rest with the customer', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '3']],
+            [['method' => 'cash', 'amount' => '75']],
+            $f['alice'],
+        );
+
+        $item = $sale->items()->firstOrFail();
+
+        $after = till()->refund(
+            $session->refresh(),
+            $sale->refresh(),
+            'One was damaged',
+            $f['alice'],
+            [['order_item_id' => $item->getKey(), 'quantity' => '1']],
+        );
+
+        expect((string) $after->returned_amount)->toBe('25.0000')
+            ->and((string) $item->fresh()?->quantity_returned)->toBe('1.0000')
+            ->and($after->exception_status->value)->toBe('none', 'two of three are still with the customer')
+            ->and((string) $f['stock']->fresh()?->on_hand)->toBe('18.0000', 'only one came back')
+            ->and($after->outstanding()->toDecimal())->toBe('0.0000', 'a part return is not a debt')
+            ->and($after->keptTotal()->toDecimal())->toBe('50.0000')
+            ->and(till()->expectedCash($session->refresh())->toDecimal())->toBe('50.0000');
+    });
+});
+
+it('marks the sale returned only once the last item comes back', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '2']],
+            [['method' => 'cash', 'amount' => '50']],
+            $f['alice'],
+        );
+
+        $item = $sale->items()->firstOrFail();
+
+        till()->refund($session->refresh(), $sale->refresh(), 'First one', $f['alice'], [
+            ['order_item_id' => $item->getKey(), 'quantity' => '1'],
+        ]);
+
+        expect($sale->fresh()?->exception_status->value)->toBe('none');
+
+        $final = till()->refund($session->refresh(), $sale->refresh(), 'Second one', $f['alice'], [
+            ['order_item_id' => $item->getKey(), 'quantity' => '1'],
+        ]);
+
+        expect($final->exception_status->value)->toBe('returned')
+            ->and((string) $final->returned_amount)->toBe('50.0000')
+            ->and((string) $f['stock']->fresh()?->on_hand)->toBe('20.0000');
+    });
+});
+
+it('refuses to take back more than the customer still has', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '2']],
+            [['method' => 'cash', 'amount' => '50']],
+            $f['alice'],
+        );
+
+        $item = $sale->items()->firstOrFail();
+
+        expect(fn () => till()->refund($session->refresh(), $sale->refresh(), 'Greedy', $f['alice'], [
+            ['order_item_id' => $item->getKey(), 'quantity' => '5'],
+        ]))->toThrow(TillRefused::class, 'still with the customer');
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('18.0000');
+    });
+});
+
+it('adjusts commission in proportion to what came back', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $plan = CommissionPlan::create([
+            'code' => 'STD', 'name' => 'Standard', 'strategy' => 'percentage_of_value', 'recipient_role' => 'salesperson',
+        ]);
+        $rule = CommissionRule::create(['commission_plan_id' => $plan->getKey(), 'code' => 'B', 'name' => 'Base']);
+        CommissionRuleVersion::create([
+            'commission_rule_id' => $rule->getKey(), 'version' => 1, 'rate_type' => 'percent',
+            'rate_value' => '10', 'valid_from' => now()->subDay(),
+        ]);
+
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '4']],
+            [['method' => 'cash', 'amount' => '100']],
+            $f['alice'],
+        );
+
+        app(CommissionEngine::class)->accrueForOrder($sale->refresh(), $f['alice']);
+
+        $earned = Commission::query()->where('type', 'direct')->firstOrFail();
+
+        expect((string) $earned->amount)->toBe('10.0000', '10% of 100');
+
+        $item = $sale->items()->firstOrFail();
+
+        till()->refund($session->refresh(), $sale->refresh(), 'One faulty', $f['alice'], [
+            ['order_item_id' => $item->getKey(), 'quantity' => '1'],
+        ]);
+
+        $adjustment = Commission::query()->where('type', 'adjustment')->firstOrFail();
+
+        expect((string) $adjustment->amount)->toBe('-2.5000', 'a quarter of the sale came back, so a quarter of the commission goes')
+            ->and($earned->fresh()?->status)->not->toBe('reversed', 'the original stands; only the difference is adjusted');
+    });
+});
+
+it('keeps a returned sale out of revenue', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '4']],
+            [['method' => 'cash', 'amount' => '100']],
+            $f['alice'],
+        );
+
+        app(RollupService::class)->rebuildSales(now());
+
+        expect((string) SalesRollup::query()->sum('revenue'))->toBe('100.0000');
+
+        $item = $sale->items()->firstOrFail();
+
+        till()->refund($session->refresh(), $sale->refresh(), 'Two faulty', $f['alice'], [
+            ['order_item_id' => $item->getKey(), 'quantity' => '2'],
+        ]);
+
+        app(RollupService::class)->rebuildSales(now());
+
+        expect((string) SalesRollup::query()->sum('revenue'))
+            ->toBe('50.0000', 'a refunded half must not still count as revenue');
     });
 });

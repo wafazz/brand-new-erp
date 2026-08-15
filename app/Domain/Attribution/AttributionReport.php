@@ -134,7 +134,7 @@ class AttributionReport
                 'channels.name',
                 DB::raw('coalesce(max(l.lead_count), 0) as leads'),
                 DB::raw('count(distinct orders.id) as orders'),
-                DB::raw('coalesce(sum(orders.total), 0) as revenue'),
+                DB::raw('coalesce(sum(orders.total - orders.returned_amount), 0) as revenue'),
             ])
             ->groupBy('channels.code', 'channels.name')
             ->orderByDesc('revenue')
@@ -158,7 +158,7 @@ class AttributionReport
                     ->where('orders.company_id', '=', $this->companyId());
                 $this->applyWindow($join, $from, $to);
             })
-            ->select('attributions.campaign_id', DB::raw('sum(orders.total) as revenue'))
+            ->select('attributions.campaign_id', DB::raw('sum(orders.total - orders.returned_amount) as revenue'))
             ->whereNotNull('attributions.campaign_id')
             ->groupBy('attributions.campaign_id');
 
@@ -220,7 +220,7 @@ class AttributionReport
                     ->where('orders.company_id', '=', $this->companyId());
                 $this->applyWindow($join, $from, $to);
             })
-            ->select('attributions.sales_team_id', DB::raw('sum(orders.total) as achieved'))
+            ->select('attributions.sales_team_id', DB::raw('sum(orders.total - orders.returned_amount) as achieved'))
             ->whereNotNull('attributions.sales_team_id')
             ->groupBy('attributions.sales_team_id');
 
@@ -264,7 +264,7 @@ class AttributionReport
             })
             ->select([
                 DB::raw('count(distinct orders.id) as orders'),
-                DB::raw('sum(orders.total) as revenue'),
+                DB::raw('sum(orders.total - orders.returned_amount) as revenue'),
             ])
             ->whereNotNull($column)
             ->groupBy($column)
