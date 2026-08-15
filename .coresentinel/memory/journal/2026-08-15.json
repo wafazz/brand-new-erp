@@ -46,6 +46,18 @@
         "concurrency"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 15:19:48",
+      "entry": "P3 Orders gate CLOSED. Three independent status axes (payment/fulfilment/exception) with each enum owning allowedNext() and OrderStateMachine owning the cross-axis rules. Both situations a single status column cannot express are now tested: a COD order packed while unpaid, and an order shipped then refunded. reasonAgainst() returns a merchant-readable sentence, and canTransition/availableTransitions derive from it so the UI, the API error and the guard share one source of truth. Deliberately did NOT inherit OMS defect P1-25 - the machine refuses Paid while paid_amount is short, so status can never contradict money. Order lines freeze unit_cost and the full price_basis decomposition at sale, which is exactly the input ADR-009 margin commission will consume, making Q-18 (is the client's landed cost real) the highest-value open question. Gate proven twice by mutation: planting a status write outside the machine fails the grep guard, and removing the optimistic lock fails the 6-process race on 3 of 3 runs. 502 tests.",
+      "tags": [
+        "p3",
+        "erp",
+        "gate-closed",
+        "orders",
+        "state-machine"
+      ],
+      "agent": "Iris"
     }
   ]
 }

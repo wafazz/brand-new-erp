@@ -7,6 +7,7 @@ namespace App\Domain\Orders;
 use App\Enums\ExceptionStatus;
 use App\Enums\FulfilmentStatus;
 use App\Enums\PaymentStatus;
+use App\Events\OrderStatusChanged;
 use App\Models\Order;
 use App\Models\User;
 use App\Support\Money;
@@ -74,7 +75,11 @@ class OrderStateMachine
                 $reason,
             );
 
-            return $locked->refresh();
+            $fresh = $locked->refresh();
+
+            OrderStatusChanged::dispatch($fresh, $from, $target, $actor);
+
+            return $fresh;
         });
     }
 

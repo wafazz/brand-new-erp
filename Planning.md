@@ -1488,7 +1488,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P1 ✔** | Access | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test |
 | **P2 ✔** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
 | **P3 ✔** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
-| **P4** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
+| **P4 ✔** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
 | **P5** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
 | **P6** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
 | **P7** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
@@ -1822,3 +1822,75 @@ is why Q-18 (is the client's landed cost real?) is now the highest-value open qu
 | P3-4 | Stock is not reserved on allocation. The fulfilment axis moves freely through `allocated`; the reservation hook belongs to P4 |
 | P3-5 | Tax is captured per line but always `0` — the `TaxRate` on a product is not yet applied by `OrderService` |
 | P3-6 | `payments` has no allocation table; one payment belongs to one order. Multi-order settlement is a P7 concern |
+
+---
+
+## Appendix G — P4 Gate Evidence (closed 2026-08-15)
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **777 passed, 1,098 assertions** (Unit 63 · Architecture 9 · Isolation 609 · Feature 86 · Concurrency 10) |
+| PHPStan | level 6, no errors |
+| Pint / `tsc` | pass |
+| Schema | **69 tables**, zero nullable `company_id` |
+
+### The three gate criteria
+
+**1. `SUM(movements) == on_hand`** — asserted per stock line after a mixed sequence of receive,
+damage, reserve-and-commit and stock-take, and again across a full order lifecycle, and again
+after a contested reservation round. `balance_after` is also checked against the running total
+movement by movement.
+
+**2. Last-unit reservation under 8 concurrent processes** — one unit, eight real OS processes:
+**exactly one `RESERVED`, seven `REFUSED`**, and `reserved` never exceeds `on_hand`.
+Removing the row lock reproduces the oversell on **3 of 3 runs**.
+
+**3. Three-way match blocks** — PO ↔ GRN ↔ Bill. Over-billed quantity and price variance are
+both caught, **all discrepancies are reported rather than stopping at the first**, and
+`assertBillPayable()` refuses with the collected reason:
+
+> *"This bill does not match the order and the goods received: WIDGET-STD: billed 10 but only 2 was received. WIDGET-STD: ordered at MYR 60.00 but billed at MYR 75.00."*
+
+### Both OMS inventory defects avoided
+
+| OMS defect | What we did |
+|---|---|
+| **H-02** — `commit()`/`release()` did not take their own lock, so a reservation was discharged twice | Both take `lockForUpdate()` on the reservation **and** the stock line; a second `commit()` returns `null` and a second `release()` returns `false`, proven by test |
+| **H-03** — lock-ordering cycle between commit-on-ship and order-cancel | Reservations are always iterated `orderBy('id')`, giving a single deterministic lock order |
+
+### P3 gaps closed
+
+- **P3-4 — stock is now reserved on allocation.** Wired by an `OrderStatusChanged` domain event
+  and an inventory listener, so Orders never reaches into Inventory directly (§25). Allocate
+  reserves, ship commits, cancel releases — each tested end to end, including that allocating
+  more than exists refuses with *"Only 2 of this item is available and 3 was requested."*
+- **P3-5 — tax is applied per line** from the product's `TaxRate`, exclusive and inclusive both
+  tested (`6%` on RM300 → RM18.00 exclusive, RM16.9812 extracted inclusive).
+
+### Approval engine
+
+Amount bands are **rows, not code**, exactly as §19 requires. The RM1,000 / RM10,000 example
+from the brief is seed data: a 500 order stops at the manager, 5,000 goes manager → finance,
+25,000 goes manager → finance → director. Self-approval is refused, a wrong-level approver is
+refused, and every action lands in an append-only trail enforced by a database trigger.
+
+### A real defect found and guarded
+
+**Laravel auto-discovers listeners in `app/Listeners`.** Registering the same listener manually
+as well registers it **twice**, so every side effect runs twice — here it reserved stock twice
+per order line, which presented as a reservation-logic bug rather than a wiring bug. Fixed by
+removing the manual registration, and guarded by an architecture test asserting the listener
+count. Planting the duplicate fails both that guard and the behavioural test.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P4-1 | **No UI for inventory or purchasing.** Services, state and invariants exist; no controllers or screens |
+| P4-2 | `stock_transfers` and `stock_adjustments` have schema and models but **no service** — transferring and adjusting is not yet possible through code |
+| P4-3 | The approval engine is not yet **wired to** purchase orders or stock adjustments; it is a working engine with no callers in the domain flows |
+| P4-4 | No landed-cost allocation. `unit_cost` on a GRN line is the PO cost; freight and duty are not apportioned — **this is the accuracy gap behind R-14 and Q-18** |
+| P4-5 | Purchase returns and supplier payment settlement are schema-only |
+| P4-6 | Reservation expiry is swept by `sweepExpired()` but **nothing schedules it** yet |

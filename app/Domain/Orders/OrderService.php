@@ -155,12 +155,13 @@ class OrderService
      */
     private function snapshotLine(Order $order, array $line, ?Customer $customer, ?string $branchId): OrderItem
     {
-        $variant = ProductVariant::query()->with('product')->findOrFail($line['variant_id']);
+        $variant = ProductVariant::query()->with('product.taxRate')->findOrFail($line['variant_id']);
         $quantity = (string) $line['quantity'];
 
         $quote = $this->prices->resolve($variant, $customer, $quantity, $branchId);
 
         $lineTotal = $quote->unitPrice->times($quantity);
+        $tax = $this->taxFor($variant, $lineTotal);
 
         return OrderItem::create([
             'order_id' => $order->getKey(),
@@ -173,11 +174,29 @@ class OrderService
             'unit_price' => $quote->unitPrice->toDecimal(),
             'unit_cost' => (string) $variant->cost_price,
             'discount_amount' => $quote->discount->times($quantity)->toDecimal(),
-            'tax_amount' => '0',
+            'tax_amount' => $tax->toDecimal(),
             'line_total' => $lineTotal->toDecimal(),
             'price_basis' => $quote->toArray(),
             'weight_grams' => $variant->weight_grams,
         ]);
+    }
+
+    private function taxFor(ProductVariant $variant, Money $lineTotal): Money
+    {
+        $rate = $variant->product?->taxRate;
+
+        if ($rate === null || ! $rate->is_active) {
+            return Money::zero($lineTotal->currency);
+        }
+
+        if ($rate->is_inclusive) {
+            $divisor = bcadd('100', (string) $rate->rate_percent, 6);
+            $net = bcdiv(bcmul($lineTotal->toDecimal(), '100', 6), $divisor, 4);
+
+            return $lineTotal->minus(Money::of($net, $lineTotal->currency));
+        }
+
+        return $lineTotal->percentage((string) $rate->rate_percent);
     }
 
     private function settlePaymentStatus(Order $order, ?User $actor): void

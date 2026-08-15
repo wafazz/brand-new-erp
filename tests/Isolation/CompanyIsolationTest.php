@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 use App\Exceptions\CrossCompanyAccessException;
 use App\Exceptions\MissingCompanyContextException;
+use App\Models\ApprovalAction;
+use App\Models\ApprovalFlow;
+use App\Models\ApprovalLevel;
+use App\Models\ApprovalRequest;
 use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\Brand;
@@ -19,6 +23,8 @@ use App\Models\CustomerContact;
 use App\Models\CustomerGroup;
 use App\Models\Department;
 use App\Models\DocumentSequence;
+use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptItem;
 use App\Models\Module;
 use App\Models\Order;
 use App\Models\OrderEvent;
@@ -32,15 +38,30 @@ use App\Models\ProductBundle;
 use App\Models\ProductImage;
 use App\Models\ProductVariant;
 use App\Models\PromotionRule;
+use App\Models\PurchaseOrder;
+use App\Models\PurchaseOrderItem;
+use App\Models\PurchaseRequest;
+use App\Models\PurchaseRequestItem;
 use App\Models\Role;
 use App\Models\RolePermissionScope;
+use App\Models\Stock;
+use App\Models\StockAdjustment;
+use App\Models\StockAdjustmentItem;
+use App\Models\StockMovement;
+use App\Models\StockReservation;
+use App\Models\StockTransfer;
+use App\Models\StockTransferItem;
 use App\Models\Supplier;
 use App\Models\SupplierAddress;
+use App\Models\SupplierBill;
+use App\Models\SupplierBillItem;
 use App\Models\SupplierContact;
+use App\Models\SupplierPayment;
 use App\Models\TaxRate;
 use App\Models\TierPrice;
 use App\Models\UnitOfMeasure;
 use App\Models\User;
+use App\Models\Warehouse;
 use App\Support\CompanyContext;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
@@ -100,6 +121,79 @@ function newOrder(string $suffix): Order
     return Order::create([
         'order_number' => 'SO-'.$suffix.'-'.str()->random(4),
         'customer_name' => 'Walk-in '.$suffix,
+    ]);
+}
+
+function newWarehouse(string $suffix): Warehouse
+{
+    return Warehouse::create(['code' => 'WH-'.$suffix.'-'.str()->random(4), 'name' => 'Warehouse '.$suffix]);
+}
+
+function newStock(string $suffix): Stock
+{
+    return Stock::create([
+        'warehouse_id' => newWarehouse($suffix.'st')->getKey(),
+        'product_variant_id' => newVariant($suffix.'sv')->getKey(),
+    ]);
+}
+
+function newUser(string $suffix): User
+{
+    return User::create([
+        'name' => 'User '.$suffix,
+        'email' => strtolower($suffix).str()->random(4).'@example.test',
+        'password' => 'secret-password',
+    ]);
+}
+
+function newPurchaseOrder(string $suffix): PurchaseOrder
+{
+    return PurchaseOrder::create([
+        'supplier_id' => newSupplier($suffix.'sup')->getKey(),
+        'reference' => 'PO-'.$suffix.'-'.str()->random(4),
+    ]);
+}
+
+function newPurchaseOrderItem(string $suffix): PurchaseOrderItem
+{
+    return PurchaseOrderItem::create([
+        'purchase_order_id' => newPurchaseOrder($suffix)->getKey(),
+        'product_variant_id' => newVariant($suffix.'poix')->getKey(),
+        'sku' => 'SKU-'.$suffix,
+        'product_name' => 'Item '.$suffix,
+        'quantity' => '10',
+        'unit_cost' => '5.0000',
+        'line_total' => '50.0000',
+    ]);
+}
+
+function newGoodsReceipt(string $suffix): GoodsReceipt
+{
+    return GoodsReceipt::create([
+        'purchase_order_id' => newPurchaseOrder($suffix.'grx')->getKey(),
+        'warehouse_id' => newWarehouse($suffix.'grx')->getKey(),
+        'reference' => 'GRN-'.$suffix.'-'.str()->random(4),
+        'received_at' => now(),
+    ]);
+}
+
+function newSupplierBill(string $suffix): SupplierBill
+{
+    return SupplierBill::create([
+        'purchase_order_id' => newPurchaseOrder($suffix.'sbx')->getKey(),
+        'supplier_id' => newSupplier($suffix.'sbx')->getKey(),
+        'reference' => 'BILL-'.$suffix.'-'.str()->random(4),
+        'supplier_invoice_number' => 'INV-'.$suffix.'-'.str()->random(4),
+        'billed_at' => now(),
+    ]);
+}
+
+function newApprovalFlow(string $suffix): ApprovalFlow
+{
+    return ApprovalFlow::create([
+        'code' => 'AF-'.$suffix.'-'.str()->random(4),
+        'name' => 'Flow '.$suffix,
+        'approvable_type' => PurchaseOrder::class,
     ]);
 }
 
@@ -173,6 +267,125 @@ function seedRowFor(string $class, Company $company): Model
                 'order_id' => newOrder($suffix)->getKey(),
                 'event' => 'order.created',
                 'summary' => 'Created for the isolation suite.',
+            ],
+            Warehouse::class => ['code' => 'WH-'.$suffix, 'name' => 'Warehouse '.$suffix],
+            PurchaseRequest::class => ['reference' => 'PR-'.$suffix],
+            PurchaseRequestItem::class => [
+                'purchase_request_id' => PurchaseRequest::create(['reference' => 'PR2-'.$suffix])->getKey(),
+                'product_variant_id' => newVariant($suffix.'pr')->getKey(),
+                'quantity' => '5',
+            ],
+            PurchaseOrder::class => [
+                'supplier_id' => newSupplier($suffix.'po')->getKey(),
+                'reference' => 'PO-'.$suffix,
+            ],
+            PurchaseOrderItem::class => [
+                'purchase_order_id' => newPurchaseOrder($suffix)->getKey(),
+                'product_variant_id' => newVariant($suffix.'poi')->getKey(),
+                'sku' => 'SKU-'.$suffix,
+                'product_name' => 'Item '.$suffix,
+                'quantity' => '10',
+                'unit_cost' => '5.0000',
+                'line_total' => '50.0000',
+            ],
+            GoodsReceipt::class => [
+                'purchase_order_id' => newPurchaseOrder($suffix.'gr')->getKey(),
+                'warehouse_id' => newWarehouse($suffix.'gr')->getKey(),
+                'reference' => 'GRN-'.$suffix,
+                'received_at' => now(),
+            ],
+            GoodsReceiptItem::class => [
+                'goods_receipt_id' => newGoodsReceipt($suffix)->getKey(),
+                'purchase_order_item_id' => newPurchaseOrderItem($suffix.'gri')->getKey(),
+                'product_variant_id' => newVariant($suffix.'gri')->getKey(),
+                'quantity' => '3',
+                'unit_cost' => '5.0000',
+            ],
+            SupplierBill::class => [
+                'purchase_order_id' => newPurchaseOrder($suffix.'sb')->getKey(),
+                'supplier_id' => newSupplier($suffix.'sb')->getKey(),
+                'reference' => 'BILL-'.$suffix,
+                'supplier_invoice_number' => 'INV-'.$suffix,
+                'billed_at' => now(),
+            ],
+            SupplierBillItem::class => [
+                'supplier_bill_id' => newSupplierBill($suffix)->getKey(),
+                'purchase_order_item_id' => newPurchaseOrderItem($suffix.'sbi')->getKey(),
+                'quantity' => '2',
+                'unit_cost' => '5.0000',
+                'line_total' => '10.0000',
+            ],
+            SupplierPayment::class => [
+                'supplier_bill_id' => newSupplierBill($suffix.'sp')->getKey(),
+                'amount' => '10.0000',
+                'paid_at' => now(),
+            ],
+            ApprovalFlow::class => [
+                'code' => 'AF-'.$suffix,
+                'name' => 'Flow '.$suffix,
+                'approvable_type' => PurchaseOrder::class,
+            ],
+            ApprovalLevel::class => [
+                'approval_flow_id' => newApprovalFlow($suffix)->getKey(),
+                'approver_user_id' => newUser($suffix.'al')->getKey(),
+                'sequence' => 1,
+            ],
+            ApprovalRequest::class => [
+                'approval_flow_id' => newApprovalFlow($suffix.'ar')->getKey(),
+                'approvable_type' => PurchaseOrder::class,
+                'approvable_id' => newPurchaseOrder($suffix.'ar')->getKey(),
+            ],
+            ApprovalAction::class => [
+                'approval_request_id' => ApprovalRequest::create([
+                    'approval_flow_id' => newApprovalFlow($suffix.'aa')->getKey(),
+                    'approvable_type' => PurchaseOrder::class,
+                    'approvable_id' => newPurchaseOrder($suffix.'aa')->getKey(),
+                ])->getKey(),
+                'sequence' => 1,
+                'action' => 'submit',
+            ],
+            Stock::class => [
+                'warehouse_id' => newWarehouse($suffix)->getKey(),
+                'product_variant_id' => newVariant($suffix.'s')->getKey(),
+            ],
+            StockMovement::class => [
+                'stock_id' => newStock($suffix)->getKey(),
+                'quantity_delta' => '5',
+                'balance_after' => '5',
+                'reason' => 'received',
+            ],
+            StockReservation::class => [
+                'stock_id' => newStock($suffix)->getKey(),
+                'quantity' => '1',
+                'status' => 'held',
+            ],
+            StockAdjustment::class => [
+                'warehouse_id' => newWarehouse($suffix)->getKey(),
+                'reference' => 'ADJ-'.$suffix,
+                'reason' => 'stock_take',
+            ],
+            StockAdjustmentItem::class => [
+                'stock_adjustment_id' => StockAdjustment::create([
+                    'warehouse_id' => newWarehouse($suffix.'a')->getKey(),
+                    'reference' => 'ADJ2-'.$suffix,
+                    'reason' => 'damaged',
+                ])->getKey(),
+                'product_variant_id' => newVariant($suffix.'ai')->getKey(),
+                'quantity_delta' => '-2',
+            ],
+            StockTransfer::class => [
+                'from_warehouse_id' => newWarehouse($suffix.'f')->getKey(),
+                'to_warehouse_id' => newWarehouse($suffix.'t')->getKey(),
+                'reference' => 'TRF-'.$suffix,
+            ],
+            StockTransferItem::class => [
+                'stock_transfer_id' => StockTransfer::create([
+                    'from_warehouse_id' => newWarehouse($suffix.'f2')->getKey(),
+                    'to_warehouse_id' => newWarehouse($suffix.'t2')->getKey(),
+                    'reference' => 'TRF2-'.$suffix,
+                ])->getKey(),
+                'product_variant_id' => newVariant($suffix.'ti')->getKey(),
+                'quantity' => '3',
             ],
             Payment::class => [
                 'order_id' => newOrder($suffix)->getKey(),

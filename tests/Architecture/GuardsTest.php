@@ -2,11 +2,13 @@
 
 declare(strict_types=1);
 
+use App\Events\OrderStatusChanged;
 use App\Http\Middleware\ResolveCompany;
 use App\Models\Order;
 use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Routing\Middleware\SubstituteBindings;
+use Illuminate\Support\Facades\Event;
 use Symfony\Component\Finder\Finder;
 
 /** @return array<int, string> */
@@ -152,4 +154,13 @@ it('keeps order money totals out of mass assignment', function (): void {
         expect(in_array($column, $fillable, true))
             ->toBeFalse("Order exposes {$column} to mass assignment; only OrderService may write it.");
     }
+});
+
+it('registers each domain listener exactly once', function (): void {
+    $listeners = Event::getListeners(OrderStatusChanged::class);
+
+    expect($listeners)->toHaveCount(1,
+        'OrderStatusChanged has more than one registered listener. Laravel auto-discovers app/Listeners, '.
+        'so a manual Event::listen for the same pair doubles every side effect.'
+    );
 });
