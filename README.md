@@ -133,7 +133,7 @@ endpoint with the button hidden.
 
 | Area | Screens |
 |---|---|
-| **Sales** | **Point of sale** — till sessions, split tenders, printable receipts, refunds · **Pipeline board** with weighted forecast and follow-ups · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
+| **Sales** | **Subscriptions** — recurring billing that raises its own invoices on a schedule · **Point of sale** — till sessions, split tenders, printable receipts, refunds · **Pipeline board** with weighted forecast and follow-ups · Customers · Leads · Orders (lines, attribution, history, commission) · Invoices with ageing |
 | **Catalogue** | Products with inline variants · Inventory with movement history and adjustments |
 | **Purchasing** | Purchase requests · Purchase orders · Goods receipts with landed cost · Supplier bills with three-way match · Approvals inbox |
 | **Money** | Commission with period totals and full explanations · Commission plans, rules and versioned rates |
@@ -198,8 +198,8 @@ added from **Administration → People**.
 > **Upgrading:** a release that adds a permission does not reach existing companies until you run
 > `php artisan erp:sync-roles`. It leaves any data scope you have tuned alone.
 
-Scheduled work — rollups, the reservation sweep, nightly backups and a weekly restore rehearsal —
-needs one cron entry. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
+Scheduled work — rollups, the reservation sweep, subscription billing, nightly backups and a weekly
+restore rehearsal — needs one cron entry. See [`DEPLOYMENT.md`](DEPLOYMENT.md).
 
 ---
 
@@ -210,7 +210,7 @@ composer gate          # Pint + PHPStan + Pest
 ./vendor/bin/pest
 ```
 
-**1,496 tests, 2,879 assertions**, in six suites that each do a different job:
+**1,692 tests, 3,502 assertions**, in six suites that each do a different job:
 
 | Suite | What it protects |
 |---|---|

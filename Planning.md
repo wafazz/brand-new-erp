@@ -1494,7 +1494,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes                                                                                                                                                         | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
 | **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, exports                                                                                                                                                                                     | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
 | **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
-| **P10 ~** | Optional modules       | **HR ~** (leave), Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, Subscriptions                                                                                                                                              | Per module. POS — V–AA. CRM — AB. HR leave — AD                                                                                                                                               |
+| **P10 ~** | Optional modules       | **HR ~** (leave), Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, **Subscriptions ✔**                                                                                                                                        | Per module. POS — V–AA. CRM — AB. HR leave — AD. Subscriptions — AF                                                                                                                           |
 
 **Hard scope gate:** no work past P4 until one real SME is using P0–P4. Adopted from SMEOS's
 Sage veto, which is the most valuable governance rule in that document.
@@ -3835,3 +3835,96 @@ an empty search are indistinguishable in the assertion, and only one of them mea
 |---|---|
 | AE-1 | The `departments` table, model and isolation seed recipe remain, with nothing reading or writing them. Kept deliberately — the cost of the table is nil and the decision to give departments a job has not been taken |
 | AE-2 | **Other closed gates may carry the same overstatement.** P1's was found only because somebody asked about a related item. Nobody has re-read P0–P8 against what actually exists |
+
+
+---
+
+## Appendix AF — Subscriptions: billing that must not run twice (2026-08-16)
+
+Fourth P10 module. Chosen for reuse — customers, orders, invoices, payments and document numbering
+all existed — and it is the first module to use the **scheduler** for business value rather than
+infrastructure.
+
+### A subscription charge is an Order
+
+The same decision as POS, for the same reason. `billOnce()` raises an ordinary `Order` with a line
+for the plan's product variant, then calls `InvoiceService::issueFromOrder()`. Recurring revenue
+therefore reaches rollups, attribution and commission by exactly the path everything else uses,
+rather than a parallel one that drifts.
+
+A plan sells a **product variant**, not an abstract amount, which is what makes that possible.
+
+### The property that matters
+
+**Running the billing job twice must not invoice a customer twice.** Three things enforce it:
+
+1. `next_invoice_on` advances after each charge, so the subscription is not selected again
+2. An existence check on `(subscription, period)` before inserting
+3. A **partial unique index** on `orders (company_id, subscription_id, billing_period)`
+
+A test bills three times and asserts one order. A second test **winds `next_invoice_on` back after a
+successful charge** and bills again — removing the schedule as a defence, so only the data check
+stands. That test exists because the first one could not fail when the check was deleted.
+
+### D-21: catching a constraint violation inside a PostgreSQL transaction writes nothing
+
+The first implementation inserted the order and caught the unique violation, advancing the period in
+the catch block. The isolated test showed the period **did not move**.
+
+In PostgreSQL a failed statement aborts the whole transaction; every subsequent statement is refused
+until rollback. The catch block ran, its write was discarded, and the subscription would have been
+retried on every run forever — a silent infinite retry that returned `false` and looked handled.
+
+Rewritten to check before inserting. The unique index remains as the backstop for a genuine race,
+where the exception now propagates and the run records it as skipped rather than pretending to
+recover.
+
+### Four guards that proved nothing until the tests were isolated
+
+The first plant pass had **three of seven guards pass**, and a fourth test could not see what it
+claimed to:
+
+| Guard | Why the test could not fail |
+|---|---|
+| Duplicate detection | `next_invoice_on` had already advanced, so the row was never selected |
+| Paused subscriptions | `billOnce()` also refuses them, landing in `skipped` — the order count was 0 either way |
+| End of term | `moveToNextPeriod()` also sets `ended`, so the second run skipped it anyway |
+| Price snapshot | asserted the subscription's stored price, never the price the **invoice charged** |
+
+Each was rewritten to isolate the mechanism it names. The last is worth remembering: **storing a
+snapshot and using it are different claims**, and only the second one bills correctly.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,692 passed / 3,502 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+Ten guards proven by planting. The Isolation suite grew by 22 unprompted and refused to pass until
+both new models had seed recipes.
+
+### A near-miss worth recording
+
+The commit for this module went out **before its documentation did**. A scripted edit to `README.md`
+asserted on a line that had changed wording earlier in the session, threw, and stopped before
+writing either file — but the `git commit` in the same command had already run.
+
+The code and tests were correct and complete; `Planning.md` simply had no appendix for a module that
+was in the repository. Caught by checking rather than assuming, and corrected in the next commit.
+
+The lesson is narrow and practical: **chaining a commit behind a scripted edit means a failed edit
+still commits.** The assertion did its job and the shell ran on regardless.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AF-1 | **Nothing collects the money.** A subscription raises an invoice; paying it is still manual. No card on file, no direct debit, no gateway |
+| AF-2 | No proration. Starting mid-period bills the full amount, and cancelling mid-period refunds nothing |
+| AF-3 | No trials, no discounts, no per-subscription price override — the plan price at signup is the only price |
+| AF-4 | A subscription bills a **single** product. Several lines in one recurring charge is not supported |
+| AF-5 | Nothing warns anybody when a subscription invoice goes unpaid. Dunning does not exist |
+| AF-6 | Quantity can be changed only in the database — no screen for it, though the field is honoured |
+| AF-7 | Still true: **no screen has been used by a human** |
