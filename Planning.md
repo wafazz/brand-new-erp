@@ -3633,9 +3633,80 @@ really written, and the board really weights by probability.
 
 | ID | Item |
 |---|---|
-| AB-1 | **No quotations.** A lead that reaches "quoted" has no document behind it — the stage is a label, not a record |
+| AB-1 | **No quotations.** A lead that reaches "quoted" has no document behind it — the stage is a label, not a record. **If this is built, see the warning below: a quotation must not be modelled as a draft order** |
 | AB-2 | The board is read-only. Moving a lead means opening it; there is **no drag between columns** |
 | AB-3 | Follow-ups have no owner separate from the person who logged them, and no way to mark one done other than logging the next contact |
 | AB-4 | `sales_activities` can hang off a customer, but **only leads have a screen that writes one**. Contact with an existing customer is still unrecordable |
 | AB-5 | No territories, sales teams or targets screens, though all three exist in the domain and `SalesTarget` already feeds the dashboard |
 | AB-6 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix AC — Investigating AB-1, and a change I made and withdrew (2026-08-15)
+
+Asked whether AB-1 needed fixing, the answer is **no, but the question was worth asking** — it found
+something, and it also found the limit of what I should decide alone.
+
+### AB-1 is accurate, unlike AA-1
+
+There is no quotation anywhere: no table, no model, no status. `Planning.md` §263 describes one with
+a nine-state machine and revisions, but that is **reference material from a prior system**, not a
+record of anything built here. The P3 row listing *"Quotation → SO → DO → Invoice → Payment"* names
+the intended flow; the quotation end of it was never implemented.
+
+So the item stands. Whether to build it is a business decision — a B2B seller needs a document to
+send, a counter shop does not.
+
+### What the question uncovered
+
+Probing whether a draft order could stand in for a quotation showed that **a draft order counts as
+revenue**. Reports exclude only `cancelled`. A 5,000 draft appears in the sales rollup and in all
+four attribution revenue queries.
+
+That is the same shape as X-1, where refunds counted as revenue — found two waves ago, fixed for
+returns, and never re-checked for anything else.
+
+### The change I made, and why I took it back
+
+I excluded `draft` from revenue. **It broke twenty tests**, and looking at why was more informative
+than the change:
+
+**No report fixture has ever set a fulfilment status.** Every order in the attribution, rollup and
+dashboard suites is `draft`. The entire revenue-reporting surface has only ever been validated
+against orders that never moved.
+
+That could have been read as twenty wrong tests. Looking further, it is not:
+
+`OrderService::create()` sets `placed_at = now()` and leaves the status at `draft`. **Every order
+raised through the Orders screen is draft until somebody walks it through the state machine**, and
+nothing forces them to. Excluding drafts would mean a shop entering orders normally sees **zero
+revenue**, while counter sales — which the till walks to completed automatically — still count.
+
+A system where typed orders vanish from revenue and till sales do not is worse than the problem.
+Reverted.
+
+### The conclusion that matters
+
+`draft` in this codebase means *"not yet processed"*, not *"not yet accepted"*. Counting it is
+defensible, because almost every real order passes through it.
+
+**It stops being defensible the moment quotations exist.** If AB-1 is built, a quotation must be its
+own record — not an order in `draft` — or every unaccepted proposal will inflate revenue on the day
+it is written. That warning is now attached to AB-1 itself, where whoever builds it will see it.
+
+### The wider lesson, twice over
+
+Asking *"is this required?"* has now been worth it both times: **AA-1 was wrong and needed no work at
+all**, and **AB-1 is right but the obvious implementation would have introduced a defect.**
+
+And this appendix records a change I made, tested, and withdrew within the same session. The
+twenty failures were not an obstacle to the change — **they were the evidence that the change was
+wrong**, and reading them was worth more than making them pass.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AC-1 | **No report fixture sets a fulfilment status.** Revenue reporting is validated only against orders that never left `draft`, which is not what a real order looks like. Worth correcting even without changing behaviour |
+| AC-2 | Nothing distinguishes *"draft, being typed"* from *"draft, sent to the customer and waiting"*. That distinction is what a quotation would provide |
