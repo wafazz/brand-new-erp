@@ -6,10 +6,15 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property ?CarbonImmutable $starts_at
+ * @property ?CarbonImmutable $ends_at
+ */
 class Campaign extends Model
 {
     use BelongsToCompany;

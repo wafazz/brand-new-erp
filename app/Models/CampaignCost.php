@@ -6,9 +6,13 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property ?CarbonImmutable $spent_on
+ */
 class CampaignCost extends Model
 {
     use BelongsToCompany;
@@ -29,5 +33,11 @@ class CampaignCost extends Model
     public function campaign(): BelongsTo
     {
         return $this->belongsTo(Campaign::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function recorder(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'recorded_by');
     }
 }
