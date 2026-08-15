@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Exceptions\CrossCompanyAccessException;
 use App\Exceptions\MissingCompanyContextException;
+use App\Models\AuditLog;
 use App\Models\Branch;
 use App\Models\Company;
 use App\Models\CompanyModuleSetting;
@@ -51,6 +52,7 @@ function seedRowFor(string $class, Company $company): Model
         $suffix = str()->random(6);
 
         $attributes = match ($class) {
+            AuditLog::class => ['action' => 'created', 'module' => 'test'],
             Branch::class => ['code' => 'BR-'.$suffix, 'name' => 'Branch '.$suffix],
             Department::class => ['code' => 'DP-'.$suffix, 'name' => 'Dept '.$suffix],
             CompanyUser::class => [

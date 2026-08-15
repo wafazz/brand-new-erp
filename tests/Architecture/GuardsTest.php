@@ -2,6 +2,10 @@
 
 declare(strict_types=1);
 
+use App\Http\Middleware\ResolveCompany;
+use Illuminate\Auth\Middleware\Authenticate;
+use Illuminate\Contracts\Http\Kernel;
+use Illuminate\Routing\Middleware\SubstituteBindings;
 use Symfony\Component\Finder\Finder;
 
 /** @return array<int, string> */
@@ -87,4 +91,18 @@ it('confines the tenancy escape hatch to the models that define it', function ()
     }
 
     expect($offenders)->toBeEmpty();
+});
+
+it('resolves the company after authentication and before route model binding', function (): void {
+    $priority = app(Kernel::class)->getMiddlewarePriority();
+
+    $auth = array_search(Authenticate::class, $priority, true);
+    $company = array_search(ResolveCompany::class, $priority, true);
+    $bindings = array_search(SubstituteBindings::class, $priority, true);
+
+    expect($auth)->not->toBeFalse('Authenticate is missing from the middleware priority list')
+        ->and($company)->not->toBeFalse('ResolveCompany is missing from the middleware priority list')
+        ->and($bindings)->not->toBeFalse('SubstituteBindings is missing from the middleware priority list')
+        ->and($auth)->toBeLessThan($company)
+        ->and($company)->toBeLessThan($bindings);
 });

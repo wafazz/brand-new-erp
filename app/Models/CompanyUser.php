@@ -4,14 +4,17 @@ declare(strict_types=1);
 
 namespace App\Models;
 
+use App\Contracts\Scopeable;
 use App\Enums\CompanyRole;
+use App\Models\Concerns\AppliesDataScope;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
-class CompanyUser extends Model
+class CompanyUser extends Model implements Scopeable
 {
+    use AppliesDataScope;
     use BelongsToCompany;
     use HasUlid;
 
@@ -46,5 +49,15 @@ class CompanyUser extends Model
     public function manager(): BelongsTo
     {
         return $this->belongsTo(User::class, 'manager_id');
+    }
+
+    public static function ownerColumn(): ?string
+    {
+        return 'user_id';
+    }
+
+    public static function branchColumn(): ?string
+    {
+        return 'branch_id';
     }
 }

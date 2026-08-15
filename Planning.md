@@ -1485,7 +1485,7 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | Phase | Name | Contents | Exit gate |
 |---|---|---|---|
 | **P0 ✔** | Foundation | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | **GATE CLOSED 2026-08-15** — see Appendix C |
-| **P1** | Access | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log | **All 16 isolation assertions green.** A salesperson cannot reach another's record via route, export, report or API — proven by test |
+| **P1 ✔** | Access | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test |
 | **P2** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
 | **P3** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
 | **P4** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
@@ -1622,3 +1622,62 @@ failures layer.
 `DataScope` enum and the per-role default scopes exist and are seeded, but the **query-layer
 resolver is P1**. P0 delivered the tenancy axis; P1 delivers the data-scope axis and the six
 additional isolation assertions that go with it (§39, items 11–16).
+
+---
+
+## Appendix D — P1 Gate Evidence (closed 2026-08-15)
+
+### What shipped
+
+| Component | Detail |
+|---|---|
+| `ScopeResolver` | Resolves the widest `DataScope` across a user's roles for a permission, then constrains the query. **Fails closed** on: no permission, no scope row, owner-less model asked for `own`/`team`, branch-scoped user with no branch |
+| `Scopeable` contract | `ownerColumn(): ?string` + `branchColumn(): ?string`. Nullable by design — `Branch` has no owner, and asking for `own` on it must refuse rather than guess |
+| `AppliesDataScope` | `Model::query()->visibleTo($user, 'permission')` |
+| `BasePolicy` | Record-level checks call **the same resolver** as list queries, so route access and list access cannot diverge |
+| `AuditLog` | Company-scoped, `Scopeable` on `actor_user_id` / `branch_id`, append-only at model **and** database trigger |
+| `AuditPurger` | The single PDPA erasure path — `SET LOCAL app.audit_purge = 'on'` inside a transaction, requires a stated reason, logged at `warning` |
+| Auth | Login/logout, throttled, guest redirect, login recorded to the audit trail |
+| Admin | Branch CRUD (scoped + audited), Audit log viewer (scoped), Bootstrap/React pages |
+
+### Gate results
+
+| Gate | Result |
+|---|---|
+| Pest | **177 passed, 295 assertions** |
+| PHPStan | level 6, no errors |
+| Pint | pass |
+| `tsc --noEmit` | pass |
+| `npm run build` | pass |
+
+### Data scope proven at two layers
+
+**Query layer** (`tests/Isolation/DataScopeTest.php`) — salesperson 2 of 5 rows, sales manager 3 (own + subordinates), branch manager 4 (whole branch), owner 5 (whole company, none from the rival company).
+
+**HTTP layer** (`tests/Feature/DataScopeRouteTest.php`) — the same expectations through real routes, plus an assertion that another user's record id **does not appear anywhere in the response body**, which is the check that catches a leak through a serialiser rather than a query.
+
+### Anti-tautology proof
+
+| Planted | Caught by |
+|---|---|
+| `DataScope::Own` stops filtering | "shows a salesperson only their own records" |
+| Fail-open instead of `whereRaw('1 = 0')` when no scope resolves | both fail-closed tests |
+| `priority([...])` replacing the default middleware list | middleware-ordering test |
+
+All three reverted clean.
+
+### Two real defects found and fixed
+
+**D-1 — `$middleware->priority([...])` replaces the framework's entire default list.** Passing two classes left a 2-entry list with `Authenticate` absent, so `ResolveCompany` sorted to position 0 and ran *before authentication*; its `abort(401)` pre-empted the guest redirect. Presented as an auth-config problem, was an ordering problem. Fixed with `prependToPriorityList`, restoring all 13 defaults with **Authenticate [9] → ResolveCompany [10] → SubstituteBindings [11]**, and pinned by a test.
+
+**D-2 — an append-only audit table makes its parent undeletable.** The `DELETE` trigger blocked the cascade from `companies`, so a company with audit rows could never be removed — the PDPA-erasure collision §30 predicted. Resolved with a deliberate purge flag: `UPDATE` is refused unconditionally, `DELETE` only under `app.audit_purge`. Both paths proven with raw SQL against the live database.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P1-1 | Department and User admin screens are **not** built. Branch CRUD and the audit viewer are; `CompanyUser` is `Scopeable` and policy-covered but has no UI yet |
+| P1-2 | Role/permission editing UI is not built. Roles are seeded by `RoleProvisioner`; changing a scope is currently a data operation |
+| P1-3 | `attribution` / export scoping (§39 item 14) is asserted for list and aggregate, but there is no export endpoint yet to test against |
+| INC-0001 | `coresentinel verify` still reports a false FAIL on Pest projects |
+| EVO-004 | Standing Rule 7 still `PENDING_REVIEW` |

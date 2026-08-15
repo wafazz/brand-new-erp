@@ -85,7 +85,7 @@ it('refuses a member of a deactivated company', function (): void {
 });
 
 it('rejects a guest before any company is resolved', function (): void {
-    $this->get('/dashboard')->assertUnauthorized();
+    $this->get('/dashboard')->assertRedirect('/login');
 
     expect(app(CompanyContext::class)->hasContext())->toBeFalse();
 });

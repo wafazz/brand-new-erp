@@ -11,6 +11,17 @@
         "prior-art"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 14:01:14",
+      "entry": "P0 Foundation gate CLOSED. Laravel 12.66 + PostgreSQL 16.14 (port 5433, server version probed not assumed - the PG14 client binary on PATH would have misled exactly as it misled SMEOS ADR-005) + Redis + Inertia/React 19/TS/Bootstrap 5. Company tenancy kernel fails closed. 143 Pest tests, PHPStan level 6 clean, Pint clean, tsc strict clean, vite build clean. Three planted violations proved the guards are not tautologies - and the FIRST planting exposed a real defect in my own guard (Pest not->toContain with a message argument passes unconditionally), which is the recorded anti-pattern I had loaded and still reproduced. Also self-inflicted: a line-based comment stripper corrupted 12 PHP files by mishandling single-line docblocks; caught by a php -l sweep and fully restored. Found and recorded INC-0001: coresentinel verify reports a false FAIL on every Pest project because it probes only vendor/bin/phpunit. DataScope resolver deliberately deferred to P1; P0 delivered the tenancy axis only.",
+      "tags": [
+        "p0",
+        "erp",
+        "gate-closed",
+        "tenancy"
+      ],
+      "agent": "Iris"
     }
   ]
 }

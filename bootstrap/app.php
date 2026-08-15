@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\ResolveCompany;
+use Illuminate\Auth\Middleware\Authenticate;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -20,14 +21,14 @@ return Application::configure(basePath: dirname(__DIR__))
             HandleInertiaRequests::class,
         ]);
 
+        $middleware->redirectGuestsTo('/login');
+
         $middleware->alias([
             'company' => ResolveCompany::class,
         ]);
 
-        $middleware->priority([
-            ResolveCompany::class,
-            SubstituteBindings::class,
-        ]);
+        $middleware->prependToPriorityList(SubstituteBindings::class, ResolveCompany::class);
+        $middleware->prependToPriorityList(ResolveCompany::class, Authenticate::class);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //
