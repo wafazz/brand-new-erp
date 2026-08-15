@@ -17,6 +17,10 @@ export default defineConfig({
         },
     },
     server: {
+        // Without this Vite binds to ::1 and writes http://[::1]:5173 into every page,
+        // which loads nothing on a machine where IPv6 localhost is unavailable — and
+        // the blank page it produces looks exactly like a JavaScript error.
+        host: '127.0.0.1',
         watch: {
             ignored: ['**/storage/framework/views/**'],
         },

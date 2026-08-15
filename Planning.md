@@ -4247,3 +4247,77 @@ application**, which is the strongest evidence yet for that reasoning.
 | AJ-2 | The guest sweep checks GET only. A signed-in POST to a guest route with no company bound is still untested |
 | AJ-3 | Two of three states were tested for a year because they were the two I had imagined. There is no reason to think this is the only such pair |
 | AJ-4 | **No longer true, at last:** a human has now opened the application. Everything past the login page is still unused |
+
+
+---
+
+## Appendix AK — Two bugs that only exist where nobody had looked (2026-08-16)
+
+Past the login page, the dashboard rendered blank. Two defects, neither reachable by any test in the
+suite, and both found in about ten minutes of looking at a browser.
+
+### 1. The application did not work in development at all
+
+```
+Error: @vitejs/plugin-react can't detect preamble. Something is wrong.
+    at resources/js/Layouts/AppLayout.tsx
+```
+
+`resources/views/app.blade.php` was missing `@viteReactRefresh`. Without it, React Fast Refresh has
+no preamble and every `.tsx` module throws on load, so the page mounts nothing.
+
+**`@viteReactRefresh` is a no-op in a production build.** `npm run build` emits identical output with
+or without it. Every test calls `withoutVite()`. CI builds for production. So the entire suite, all
+three CI jobs and every asset build passed for the whole life of the project while the development
+server — the only mode a developer ever uses — rendered a blank page.
+
+Nothing was wrong with the code being tested. The tests validated the production asset path, and the
+development path had never been exercised once.
+
+### 2. Six navigation items could not be clicked
+
+The sidebar ended mid-word at *Channels*. Commission, Commission plans, Leave, Branches, People,
+Roles and reach and Audit log were all present in the DOM and all reachable by typing the URL, but
+none of them could be reached from the sidebar.
+
+`<nav className="p-2 overflow-auto">` already asked to scroll. It never did, because **a flex item
+defaults to `min-height: auto` and refuses to shrink below its own content**, so the nav grew past
+the sidebar instead of scrolling inside it. `flex: 1 1 auto; min-height: 0` fixes it.
+
+This got worse as the project grew and nobody noticed, because the list only overflows once enough
+modules exist. POS, Pipeline, Subscriptions and Leave — four modules added in the last few
+appendices — are what pushed it over the edge.
+
+### What I chased first, and was wrong about
+
+The dev server was bound to `[::1]` while the browser used `127.0.0.1`, which is a real fragility and
+looked like an excellent suspect. It was not the cause — Vite connected fine. Reading the browser
+console instead of reasoning about the symptom gave the answer in one call.
+
+It is pinned to `127.0.0.1` now anyway, because a page that hardcodes `http://[::1]:5173` renders
+blank on any machine without IPv6 localhost, and that failure is indistinguishable from a JavaScript
+error.
+
+### What is guarded now
+
+`tests/Architecture/DevServerTest.php` asserts the preamble exists **and** precedes `@vite`, and that
+the dev server pins a host. Both were verified by planting.
+
+The sidebar has no test. A clipped flex child is a visual fact, and asserting it would need a real
+browser rendering a real viewport. It is fixed and it is verified by looking at it, which is the
+honest description.
+
+### The pattern in both
+
+Every test in this project runs the application headless, in production asset mode, with no viewport.
+Both defects live precisely in what that excludes. **1,749 tests could not have found either, no
+matter how many more I wrote.**
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AK-1 | Nothing renders a page in a browser as part of the suite. Both defects here needed a viewport and a dev server, and no test has either |
+| AK-2 | The sidebar fix is verified by eye at one viewport size. Nothing checks it at any other, and nothing will notice when the next module overflows something else |
+| AK-3 | The dev-mode path is now guarded at two specific points. Anything else that differs between `npm run dev` and `npm run build` remains untested |
+| AK-4 | A human has now reached the dashboard. Every screen beyond it is still unused |

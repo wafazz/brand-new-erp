@@ -26,7 +26,7 @@ and marketing attribution, for a Malaysian company operating across multiple bra
 | Roles | 11 | 
 | Permissions | 74 |
 | Data scopes | 5 (own, team, branch, company, all) |
-| Tests | 1,749 passing / 3,633 assertions |
+| Tests | 1,751 passing / 3,637 assertions |
 
 There is no public API and no file upload. Every route requires a session except `GET|POST /login`
 and **two Billplz payment routes, which are authenticated by HMAC signature rather than by a

@@ -34,6 +34,14 @@
     top: 0;
 }
 
+// The nav carries overflow-auto, but a flex item defaults to min-height: auto and
+// will not shrink below its content. Without this it grows past the sidebar and the
+// last groups are clipped rather than scrolled to.
+.app-sidebar > nav {
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
 @media (max-width: 991.98px) {
     .app-sidebar { display: none; }
     .app-sidebar.app-sidebar-open {
