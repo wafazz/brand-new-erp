@@ -98,6 +98,15 @@
       "source": "Iris wrote the file; verified 48 H2 sections and 1420 lines",
       "created_at": "2026-08-15 13:06:24",
       "last_verified": "2026-08-15 13:06:24"
+    },
+    {
+      "id": "MEM-880e24381e",
+      "fact": "VERIFIED TOOLCHAIN 2026-08-15: PHP 8.4.10, Composer 2.8.10, Node v20.19.4, npm 10.8.2, Redis 8.4.0 on 6379. PostgreSQL SERVER is 16.14 on port 5433 (brew postgresql@16 started). WARNING: 'psql --version' reports 14.18 because /opt/homebrew/bin/psql is the PG14 CLIENT binary while postgresql@14 service is NOT running. Always probe 'select version()' against the running server, never the client binary. Port 5433 matches the SMEOS convention (its phpunit.xml pins 5433). MariaDB also running on 3306 - not used by this project",
+      "confidence": 0.99,
+      "classification": "Known (Empirically Verified)",
+      "source": "lsof -iTCP -sTCP:LISTEN + psql -p 5433 -tAc 'select version()'",
+      "created_at": "2026-08-15 13:36:45",
+      "last_verified": "2026-08-15 13:36:45"
     }
   ]
 }

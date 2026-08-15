@@ -1,0 +1,90 @@
+<?php
+
+declare(strict_types=1);
+
+use Symfony\Component\Finder\Finder;
+
+/** @return array<int, string> */
+function phpSourceFiles(): array
+{
+    $files = [];
+    $root = dirname(__DIR__, 2);
+
+    foreach (Finder::create()->files()->name('*.php')->in([$root.'/app', $root.'/database', $root.'/routes']) as $file) {
+        $files[] = $file->getRealPath();
+    }
+
+    return $files;
+}
+
+it('declares strict types in every source file', function (): void {
+    $offenders = [];
+
+    foreach (phpSourceFiles() as $path) {
+        $head = (string) file_get_contents($path, length: 512);
+
+        if (! str_contains($head, 'declare(strict_types=1);')) {
+            $offenders[] = str_replace(dirname(__DIR__, 2).'/', '', $path);
+        }
+    }
+
+    expect($offenders)->toBeEmpty();
+});
+
+it('writes no prose comments in source', function (): void {
+    $offenders = [];
+    $allowed = '/@(param|return|var|template|throws|phpstan|extends|implements|method|property|deprecated|see)/';
+
+    foreach (phpSourceFiles() as $path) {
+        foreach (file($path) ?: [] as $number => $line) {
+            $trimmed = trim($line);
+
+            if ($trimmed === '' || ! preg_match('#^(//|/\*|\*)#', $trimmed)) {
+                continue;
+            }
+
+            if (preg_match('#^(/\*\*|\*/|\*\s*$)#', $trimmed) || preg_match($allowed, $trimmed)) {
+                continue;
+            }
+
+            $offenders[] = str_replace(dirname(__DIR__, 2).'/', '', $path).':'.($number + 1).' '.$trimmed;
+        }
+    }
+
+    expect($offenders)->toBeEmpty();
+});
+
+it('leaves no TODO markers in source', function (): void {
+    $offenders = [];
+
+    foreach (phpSourceFiles() as $path) {
+        $contents = (string) file_get_contents($path);
+
+        if (preg_match('/\b(TODO|FIXME|XXX|HACK)\b/', $contents)) {
+            $offenders[] = str_replace(dirname(__DIR__, 2).'/', '', $path);
+        }
+    }
+
+    expect($offenders)->toBeEmpty();
+});
+
+it('confines the tenancy escape hatch to the models that define it', function (): void {
+    $offenders = [];
+    $allowedFiles = ['app/Models/Concerns/BelongsToCompany.php'];
+
+    foreach (phpSourceFiles() as $path) {
+        $relative = str_replace(dirname(__DIR__, 2).'/', '', $path);
+
+        if (in_array($relative, $allowedFiles, true)) {
+            continue;
+        }
+
+        $contents = (string) file_get_contents($path);
+
+        if (str_contains($contents, 'withoutGlobalScope')) {
+            $offenders[] = $relative;
+        }
+    }
+
+    expect($offenders)->toBeEmpty();
+});
