@@ -1,0 +1,116 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  guards:
+    name: Forbidden patterns
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: company_id must never be mass assignable
+        run: |
+          if grep -rn "'company_id'" app/Models --include='*.php' | grep -v 'Concerns/BelongsToCompany.php' | grep -q "fillable"; then
+            echo "company_id appears in a \$fillable array"; exit 1
+          fi
+
+      - name: the tenancy escape hatch stays in one place
+        run: |
+          hits=$(grep -rln 'withoutGlobalScope' app --include='*.php' | grep -v 'app/Models/Concerns/BelongsToCompany.php' || true)
+          if [ -n "$hits" ]; then echo "withoutGlobalScope outside the sanctioned hatch:"; echo "$hits"; exit 1; fi
+
+      - name: no public disk for business documents
+        run: |
+          if grep -rn "Storage::disk('public')\|Storage::url(" app --include='*.php'; then exit 1; fi
+
+      - name: no TODO markers
+        run: |
+          if grep -rnE '\b(TODO|FIXME|XXX|HACK)\b' app database routes --include='*.php'; then exit 1; fi
+
+      - name: every source file declares strict types
+        run: |
+          missing=0
+          for f in $(find app database routes -name '*.php'); do
+            head -c 512 "$f" | grep -q 'declare(strict_types=1);' || { echo "missing strict_types: $f"; missing=1; }
+          done
+          exit $missing
+
+  test:
+    name: PHP ${{ matrix.php }}
+    runs-on: ubuntu-latest
+    needs: guards
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.3', '8.4']
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: sme_erp_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports: ['5433:5432']
+        options: >-
+          --health-cmd pg_isready --health-interval 10s
+          --health-timeout 5s --health-retries 5
+      redis:
+        image: redis:7
+        ports: ['6379:6379']
+        options: --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: pdo_pgsql, bcmath, redis
+          coverage: none
+
+      - run: composer install --prefer-dist --no-interaction --no-progress
+
+      - run: cp .env.example .env && php artisan key:generate
+
+      - name: Pint
+        run: ./vendor/bin/pint --test
+
+      - name: PHPStan
+        run: ./vendor/bin/phpstan analyse --memory-limit=1G --no-progress
+
+      - name: Pest
+        run: ./vendor/bin/pest
+        env:
+          DB_CONNECTION: pgsql
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5433
+          DB_DATABASE: sme_erp_test
+          DB_USERNAME: postgres
+          DB_PASSWORD: postgres
+
+      - name: Isolation test count must not fall
+        run: |
+          count=$(grep -c "^it(" tests/Isolation/*.php | awk -F: '{s+=$2} END {print s}')
+          echo "isolation assertions: $count"
+          if [ "$count" -lt 12 ]; then
+            echo "The isolation suite shrank. Deleting an isolation test breaks the build as loudly as breaking one."
+            exit 1
+          fi
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    needs: guards
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20.19'
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build

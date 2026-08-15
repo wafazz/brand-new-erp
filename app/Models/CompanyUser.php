@@ -7,14 +7,12 @@ namespace App\Models;
 use App\Enums\CompanyRole;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CompanyUser extends Model
 {
     use BelongsToCompany;
-    use HasFactory;
     use HasUlid;
 
     protected $fillable = [

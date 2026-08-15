@@ -4,11 +4,16 @@ declare(strict_types=1);
 
 use App\Exceptions\CrossCompanyAccessException;
 use App\Exceptions\MissingCompanyContextException;
+use App\Models\Branch;
 use App\Models\Company;
+use App\Models\CompanyModuleSetting;
+use App\Models\CompanyUser;
 use App\Models\Concerns\BelongsToCompany;
+use App\Models\Department;
 use App\Models\Module;
 use App\Models\Permission;
 use App\Models\Role;
+use App\Models\RolePermissionScope;
 use App\Models\User;
 use App\Support\CompanyContext;
 use Illuminate\Database\Eloquent\Model;
@@ -42,13 +47,13 @@ function scopedModels(): array
 
 function seedRowFor(string $class, Company $company): Model
 {
-    return app(CompanyContext::class)->runAs($company->getKey(), function () use ($class, $company): Model {
+    return app(CompanyContext::class)->runAs($company->getKey(), function () use ($class): Model {
         $suffix = str()->random(6);
 
         $attributes = match ($class) {
-            App\Models\Branch::class => ['code' => 'BR-'.$suffix, 'name' => 'Branch '.$suffix],
-            App\Models\Department::class => ['code' => 'DP-'.$suffix, 'name' => 'Dept '.$suffix],
-            App\Models\CompanyUser::class => [
+            Branch::class => ['code' => 'BR-'.$suffix, 'name' => 'Branch '.$suffix],
+            Department::class => ['code' => 'DP-'.$suffix, 'name' => 'Dept '.$suffix],
+            CompanyUser::class => [
                 'user_id' => User::create([
                     'name' => 'User '.$suffix,
                     'email' => strtolower($suffix).'@example.test',
@@ -56,15 +61,15 @@ function seedRowFor(string $class, Company $company): Model
                 ])->getKey(),
                 'role' => 'staff',
             ],
-            App\Models\CompanyModuleSetting::class => [
+            CompanyModuleSetting::class => [
                 'module_key' => Module::firstOrCreate(
                     ['key' => 'orders'],
                     ['name' => 'Orders', 'is_core' => true]
                 )->key,
                 'enabled' => true,
             ],
-            App\Models\Role::class => ['name' => 'role-'.$suffix, 'guard_name' => 'web'],
-            App\Models\RolePermissionScope::class => [
+            Role::class => ['name' => 'role-'.$suffix, 'guard_name' => 'web'],
+            RolePermissionScope::class => [
                 'role_id' => Role::create([
                     'name' => 'role-'.$suffix,
                     'guard_name' => 'web',

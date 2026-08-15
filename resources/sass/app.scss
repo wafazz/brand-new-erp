@@ -1,0 +1,27 @@
+@use 'variables' as *;
+@use 'bootstrap/scss/bootstrap' with (
+    $primary: $primary,
+    $secondary: $secondary,
+    $success: $success,
+    $danger: $danger,
+    $warning: $warning,
+    $info: $info,
+    $font-family-sans-serif: $font-family-sans-serif,
+    $border-radius: $border-radius
+);
+@use 'bootstrap-icons/font/bootstrap-icons.css';
+
+.app-shell {
+    min-height: 100vh;
+}
+
+.app-sidebar {
+    width: 260px;
+    flex: 0 0 260px;
+}
+
+@media (max-width: 991.98px) {
+    .app-sidebar {
+        display: none;
+    }
+}

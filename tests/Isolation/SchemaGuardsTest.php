@@ -50,4 +50,3 @@ it('applies the company trait to every model that has a company_id column', func
         'It is therefore invisible to the isolation suite and queries unscoped.'
     );
 })->with(everyModel());
-
