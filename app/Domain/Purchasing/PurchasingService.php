@@ -24,6 +24,7 @@ class PurchasingService
         private readonly InventoryService $inventory,
         private readonly DocumentNumberService $numbers,
         private readonly ThreeWayMatch $matcher,
+        private readonly CostingService $costing,
     ) {}
 
     /** @param array<int, array{purchase_order_item_id: string, quantity: string}> $lines */
@@ -88,6 +89,7 @@ class PurchasingService
             }
 
             $this->refreshOrderStatus($order->refresh());
+            $this->costing->applyCosting($receipt->refresh());
 
             return $receipt->refresh();
         });

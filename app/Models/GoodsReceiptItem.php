@@ -14,12 +14,14 @@ class GoodsReceiptItem extends Model
     use BelongsToCompany;
     use HasUlid;
 
-    protected $fillable = ['goods_receipt_id', 'purchase_order_item_id', 'product_variant_id', 'quantity', 'unit_cost'];
+    protected $fillable = ['landed_unit_cost', 'landed_cost_basis', 'goods_receipt_id', 'purchase_order_item_id', 'product_variant_id', 'quantity', 'unit_cost'];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
+            'landed_cost_basis' => 'array',
+            'landed_unit_cost' => 'decimal:4',
             'quantity' => 'decimal:4',
             'unit_cost' => 'decimal:4',
         ];

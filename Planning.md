@@ -1891,7 +1891,7 @@ count. Planting the duplicate fails both that guard and the behavioural test.
 | P4-1 | **No UI for inventory or purchasing.** Services, state and invariants exist; no controllers or screens |
 | P4-2 | `stock_transfers` and `stock_adjustments` have schema and models but **no service** — transferring and adjusting is not yet possible through code |
 | P4-3 | The approval engine is not yet **wired to** purchase orders or stock adjustments; it is a working engine with no callers in the domain flows |
-| P4-4 | No landed-cost allocation. `unit_cost` on a GRN line is the PO cost; freight and duty are not apportioned — **this is the accuracy gap behind R-14 and Q-18** |
+| P4-4 ✔ | ~~No landed-cost allocation~~ **CLOSED** — see Appendix M. Original: no landed-cost allocation. `unit_cost` on a GRN line is the PO cost; freight and duty are not apportioned — **this is the accuracy gap behind R-14 and Q-18** |
 | P4-5 | Purchase returns and supplier payment settlement are schema-only |
 | P4-6 | Reservation expiry is swept by `sweepExpired()` but **nothing schedules it** yet |
 
@@ -2251,8 +2251,92 @@ known-credential account can reach production.
 | ID | Item |
 |---|---|
 | P9-1 | **External security review** — the gate's first half. Recommended before any real customer data is loaded |
-| P9-2 | **Nothing is scheduled.** Rollups and the reservation sweep have no scheduler entries; dashboards will go stale and expired holds will never release |
+| P9-2 ✔ | ~~Nothing is scheduled~~ **CLOSED** — see Appendix M. Original: nothing is scheduled. Rollups and the reservation sweep have no scheduler entries; dashboards will go stale and expired holds will never release |
 | P9-3 | **No CI run against this suite in a real pipeline** — the workflow exists from P0 but has never executed on a runner |
 | P9-4 | Backups are not yet copied off-machine, and no restore rehearsal is scheduled |
 | P9-5 | **The UI gap.** Nine phases of domain logic sit behind authentication, branch admin, an audit viewer and dashboards. This is not yet a system staff can operate |
 | P9-6 | Q-18 / P4-4 / R-14 — landed cost is still not apportioned, and commission depends on it |
+
+---
+
+## Appendix M — Post-P9 closures (2026-08-15)
+
+Three items closed after the P9 gate, chosen because two were cheap blockers and the third was
+the longest-standing correctness risk in the project.
+
+| Gate | Result |
+|---|---|
+| Pest | **1,308 passed, 1,933 assertions** |
+| PHPStan / Pint / `tsc` | pass |
+| Schema | 107 tables |
+
+### P9-2 — scheduled work is now registered ✔
+
+`erp:rebuild-rollups` and `erp:sweep-reservations` iterate **every active company**, isolate each
+one in its own `runAs` block, and **continue past a failing company rather than aborting the run** —
+one tenant's bad data must not stop everyone else's dashboards updating.
+
+| Command | Cadence |
+|---|---|
+| `erp:sweep-reservations` | every 5 minutes |
+| `erp:rebuild-rollups` | every 15 minutes |
+| `erp:rebuild-rollups --date=<yesterday>` | daily 02:15 |
+
+All three are `withoutOverlapping()` and `onOneServer()`, asserted by test. CI now fails if either
+command disappears from the schedule.
+
+### P9-3 — CI verified locally ✔ (partially)
+
+**Stated plainly: I cannot run GitHub Actions.** What was done instead — the workflow was structurally
+validated (no tabs, every declared step has an action) and **every guard it declares was executed
+locally and passed**: mass-assignment, escape-hatch confinement, public-disk, TODO markers,
+strict types, isolation floor.
+
+The workflow also gained two guards it was missing: the **private disk must serve no route** (the S-1
+finding from P9) and **scheduled work must stay registered**. The isolation floor was raised from 24
+to 28 against a current count of 29.
+
+**It still has never executed on a runner.** That remains open as P9-3.
+
+### P4-4 / R-14 — landed cost is implemented ✔
+
+The longest-standing correctness gap. Since P4, `unit_cost` was whatever someone typed, and since
+P6 margin-based commission has been paying from it.
+
+Now: `goods_receipt_costs` records freight, duty, handling or insurance with an allocation rule.
+The allocator apportions each pool and writes `landed_unit_cost` plus a `landed_cost_basis` JSONB
+carrying every component, its share, its per-unit effect and an explanation:
+
+> `Purchase MYR 40.00 plus freight 4.0000 per unit = MYR 44.00`
+
+The allocation modes are genuinely different, proven by test:
+
+| Pool | Rule | Cheap line (40) | Pricey line (160) |
+|---|---|---|---|
+| MYR 200 freight | `by_value` | → **44.00** | → **176.00** |
+| MYR 200 duty | `by_quantity` | → **50.00** | → **170.00** |
+
+**`average_cost` is recomputed from the whole receipt history, not maintained incrementally** — so
+re-applying costing is idempotent by construction, with no reversal bookkeeping and no drift.
+Receiving 10 at 40 then 10 at 60 gives a weighted average of exactly 50.
+
+Order lines now snapshot `average_cost` when it exists, falling back to `cost_price`, and record
+**`unit_cost_source`** — so any margin or commission figure can say whether it rests on a real
+receipt or a typed guess.
+
+Proven by mutation twice: collapsing every allocation to `by_quantity` fails four tests, and making
+the average ignore landed cost fails four more.
+
+### What this does and does not do for R-14
+
+**Does:** cost is now derived from actual receipts and actual freight, and every figure carries its
+provenance.
+
+**Does not:** it cannot make the client's *input* data true. `Q-18` stands — if purchase orders are
+raised at estimated prices, or freight invoices are never entered, `average_cost` will faithfully
+average wrong numbers. The mechanism is now correct; the data question is still theirs to answer.
+
+### Still open
+
+P9-1 (external security review), P9-3 (CI never run), P9-4 (backups off-machine, scheduled
+rehearsal), P9-5 (**the UI gap**), and the 55 remaining carried-forward items.

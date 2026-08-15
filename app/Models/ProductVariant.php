@@ -17,12 +17,14 @@ class ProductVariant extends Model
     /** @var array<string, mixed> */
     protected $attributes = ['cost_price' => '0', 'selling_price' => '0', 'is_default' => false, 'is_active' => true];
 
-    protected $fillable = ['product_id', 'sku', 'name', 'barcode', 'options', 'cost_price', 'selling_price', 'wholesale_price', 'member_price', 'weight_grams', 'is_default', 'is_active'];
+    protected $fillable = ['average_cost', 'cost_quantity', 'product_id', 'sku', 'name', 'barcode', 'options', 'cost_price', 'selling_price', 'wholesale_price', 'member_price', 'weight_grams', 'is_default', 'is_active'];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
         return [
+            'cost_quantity' => 'decimal:4',
+            'average_cost' => 'decimal:4',
             'options' => 'array',
             'cost_price' => 'decimal:4',
             'selling_price' => 'decimal:4',

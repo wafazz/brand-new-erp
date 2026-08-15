@@ -27,6 +27,12 @@ jobs:
         run: |
           if grep -rn "Storage::disk('public')\|Storage::url(" app --include='*.php'; then exit 1; fi
 
+      - name: the private disk must serve no route
+        run: |
+          if grep -nE "'serve'\s*=>\s*true" config/filesystems.php; then
+            echo "A disk is registering an unauthenticated /storage route."; exit 1
+          fi
+
       - name: no TODO markers
         run: |
           if grep -rnE '\b(TODO|FIXME|XXX|HACK)\b' app database routes --include='*.php'; then exit 1; fi
@@ -85,6 +91,11 @@ jobs:
 
       - name: Pest
         run: ./vendor/bin/pest
+
+      - name: Scheduled work must stay registered
+        run: |
+          php artisan schedule:list | grep -q 'erp:rebuild-rollups' || { echo "rollups are not scheduled"; exit 1; }
+          php artisan schedule:list | grep -q 'erp:sweep-reservations' || { echo "the reservation sweep is not scheduled"; exit 1; }
         env:
           DB_CONNECTION: pgsql
           DB_HOST: 127.0.0.1
@@ -97,7 +108,7 @@ jobs:
         run: |
           count=$(grep -c "^it(" tests/Isolation/*.php | awk -F: '{s+=$2} END {print s}')
           echo "isolation assertions: $count"
-          if [ "$count" -lt 24 ]; then
+          if [ "$count" -lt 28 ]; then
             echo "The isolation suite shrank. Deleting an isolation test breaks the build as loudly as breaking one."
             exit 1
           fi

@@ -44,6 +44,7 @@ use App\Models\DocumentSequence;
 use App\Models\Expense;
 use App\Models\ExpenseCategory;
 use App\Models\GoodsReceipt;
+use App\Models\GoodsReceiptCost;
 use App\Models\GoodsReceiptItem;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -536,6 +537,11 @@ function seedRowFor(string $class, Company $company): Model
                 'warehouse_id' => newWarehouse($suffix.'gr')->getKey(),
                 'reference' => 'GRN-'.$suffix,
                 'received_at' => now(),
+            ],
+            GoodsReceiptCost::class => [
+                'goods_receipt_id' => newGoodsReceipt($suffix.'grc')->getKey(),
+                'kind' => 'freight',
+                'amount' => '100',
             ],
             GoodsReceiptItem::class => [
                 'goods_receipt_id' => newGoodsReceipt($suffix)->getKey(),

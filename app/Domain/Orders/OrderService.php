@@ -7,6 +7,7 @@ namespace App\Domain\Orders;
 use App\Domain\Attribution\AttributionService;
 use App\Domain\Numbering\DocumentNumberService;
 use App\Domain\Pricing\PriceResolver;
+use App\Domain\Purchasing\CostingService;
 use App\Enums\PaymentStatus;
 use App\Models\Customer;
 use App\Models\Lead;
@@ -28,6 +29,7 @@ class OrderService
         private readonly OrderMutabilityPolicy $policy,
         private readonly OrderEventRecorder $events,
         private readonly AttributionService $attribution,
+        private readonly CostingService $costing,
     ) {}
 
     /**
@@ -188,7 +190,8 @@ class OrderService
             'options' => $variant->options,
             'quantity' => $quantity,
             'unit_price' => $quote->unitPrice->toDecimal(),
-            'unit_cost' => (string) $variant->cost_price,
+            'unit_cost' => $this->costing->costFor($variant)->toDecimal(),
+            'unit_cost_source' => $this->costing->costSourceFor($variant),
             'discount_amount' => $quote->discount->times($quantity)->toDecimal(),
             'tax_amount' => $tax->toDecimal(),
             'line_total' => $lineTotal->toDecimal(),

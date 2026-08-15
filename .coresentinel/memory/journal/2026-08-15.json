@@ -119,6 +119,19 @@
         "dashboards"
       ],
       "agent": "Iris"
+    },
+    {
+      "time": "2026-08-15 16:44:50",
+      "entry": "P9 Hardening: gate PARTIALLY met, marked [~] not [\u2714]. The gate requires an EXTERNAL security review, which by definition I cannot perform - so I did an internal review against 40-security-protocol.md and converted it into a permanent 19-assertion suite instead, and said plainly that half the gate is unmet. Three real findings: Laravel ships the local disk with serve=>true which registers GET and PUT /storage/{path} with NO middleware at all (unauthenticated read AND write against the private business-document disk), Horizon had no explicit gate so access depended on APP_ENV, and the root path answered every HTTP verb. All fixed and guarded. PDPA erasure implemented - anonymises operational PII everywhere it was written while retaining invoices under accounting obligation, refuses without a stated reason, records itself in the audit trail. The restore rehearsal immediately earned its place: the FIRST backup attempt failed because pg_dump refuses a newer server (client 14.18 vs server 16.14) - the third time the client-versus-server distinction has caused a defect here. Round-trip verified to preserve 106 tables, 11 triggers, 91 checks, 270 FKs, and the restored database still refuses journal edits when probed with real rows rather than empty tables. Also caught a measurement error in my own N+1 test: comparing a cold request to a warm one measured cache priming, not N+1. 1283 tests.",
+      "tags": [
+        "p9",
+        "erp",
+        "security",
+        "pdpa",
+        "backup",
+        "partial"
+      ],
+      "agent": "Iris"
     }
   ]
 }

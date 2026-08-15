@@ -26,7 +26,7 @@ class OrderItem extends Model
         'tax_amount' => '0',
     ];
 
-    protected $fillable = [
+    protected $fillable = ['unit_cost_source',
         'order_id', 'product_variant_id', 'sku', 'product_name', 'variant_name', 'options',
         'quantity', 'unit_price', 'unit_cost', 'discount_amount', 'tax_amount', 'line_total',
         'price_basis', 'weight_grams',
