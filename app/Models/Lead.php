@@ -8,10 +8,15 @@ use App\Contracts\Scopeable;
 use App\Models\Concerns\AppliesDataScope;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property ?CarbonImmutable $captured_at
+ * @property ?CarbonImmutable $converted_at
+ */
 class Lead extends Model implements Scopeable
 {
     use AppliesDataScope;
@@ -49,6 +54,18 @@ class Lead extends Model implements Scopeable
     public function order(): BelongsTo
     {
         return $this->belongsTo(Order::class, 'converted_order_id');
+    }
+
+    /** @return BelongsTo<PipelineStage, $this> */
+    public function stage(): BelongsTo
+    {
+        return $this->belongsTo(PipelineStage::class, 'pipeline_stage_id');
+    }
+
+    /** @return BelongsTo<Branch, $this> */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     /** @return HasMany<LeadActivity, $this> */

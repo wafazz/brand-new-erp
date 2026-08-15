@@ -25,3 +25,22 @@
         display: none;
     }
 }
+
+.app-sidebar {
+    display: flex;
+    flex-direction: column;
+    max-height: 100vh;
+    position: sticky;
+    top: 0;
+}
+
+@media (max-width: 991.98px) {
+    .app-sidebar { display: none; }
+    .app-sidebar.app-sidebar-open {
+        display: flex;
+        position: fixed;
+        inset: 0 auto 0 0;
+        z-index: 1030;
+        box-shadow: 0 0 2rem rgba(0,0,0,.25);
+    }
+}

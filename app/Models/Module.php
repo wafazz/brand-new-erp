@@ -11,7 +11,7 @@ class Module extends Model
 {
     use HasUlid;
 
-    protected $fillable = ['key', 'name', 'icon', 'route', 'nav_group', 'sort', 'is_core', 'is_active'];
+    protected $fillable = ['key', 'name', 'icon', 'route', 'permission', 'nav_group', 'sort', 'is_core', 'is_active'];
 
     /** @return array<string, string> */
     protected function casts(): array

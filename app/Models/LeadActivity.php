@@ -29,4 +29,10 @@ class LeadActivity extends Model
     {
         return $this->belongsTo(Lead::class);
     }
+
+    /** @return BelongsTo<User, $this> */
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'user_id');
+    }
 }

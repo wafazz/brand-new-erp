@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Http\Middleware;
 
 use App\Models\Company;
+use App\Services\Access\NavigationBuilder;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
@@ -38,6 +39,9 @@ class HandleInertiaRequests extends Middleware
                 'name' => $company->name,
                 'currency' => $company->currency,
             ],
+            'navigation' => $user === null || ! app()->bound(Company::class)
+                ? []
+                : app(NavigationBuilder::class)->for($user),
             'flash' => [
                 'success' => $request->session()->get('success'),
                 'error' => $request->session()->get('error'),

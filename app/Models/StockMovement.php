@@ -44,4 +44,10 @@ class StockMovement extends Model
     {
         return $this->belongsTo(Stock::class);
     }
+
+    /** @return BelongsTo<User, $this> */
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
+    }
 }

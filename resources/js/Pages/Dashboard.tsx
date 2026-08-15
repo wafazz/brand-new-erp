@@ -42,7 +42,7 @@ export default function Dashboard({ companyName, figures, availableVariants }: P
             : 'warning'
 
     return (
-        <AppLayout navigation={[{ label: 'Dashboard', href: '/dashboard', icon: 'bi-speedometer2' }]}>
+        <AppLayout>
             <Head title={`${titles[figures.variant]} dashboard`} />
 
             <PageHeader

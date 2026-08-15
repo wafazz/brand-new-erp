@@ -8,10 +8,16 @@ use App\Contracts\Scopeable;
 use App\Models\Concerns\AppliesDataScope;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property ?CarbonImmutable $issued_at
+ * @property ?CarbonImmutable $due_at
+ * @property ?CarbonImmutable $voided_at
+ */
 class Invoice extends Model implements Scopeable
 {
     use AppliesDataScope;
