@@ -41,4 +41,10 @@ class ApprovalRequest extends Model
     {
         return $this->belongsTo(ApprovalFlow::class, 'approval_flow_id');
     }
+
+    /** @return BelongsTo<User, $this> */
+    public function requester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
 }

@@ -19,6 +19,7 @@ class LandedCostAllocator
         return DB::transaction(function () use ($receipt): int {
             $items = GoodsReceiptItem::query()
                 ->where('goods_receipt_id', $receipt->getKey())
+                ->with('variant')
                 ->orderBy('id')
                 ->get();
 

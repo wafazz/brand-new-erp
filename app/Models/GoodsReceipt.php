@@ -6,10 +6,14 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property ?CarbonImmutable $received_at
+ */
 class GoodsReceipt extends Model
 {
     use BelongsToCompany;
@@ -35,5 +39,17 @@ class GoodsReceipt extends Model
     public function purchaseOrder(): BelongsTo
     {
         return $this->belongsTo(PurchaseOrder::class);
+    }
+
+    /** @return BelongsTo<Warehouse, $this> */
+    public function warehouse(): BelongsTo
+    {
+        return $this->belongsTo(Warehouse::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function receiver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'received_by');
     }
 }

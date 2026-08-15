@@ -6,8 +6,13 @@ namespace App\Models;
 
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
+/**
+ * @property ?CarbonImmutable $paid_at
+ */
 class SupplierPayment extends Model
 {
     use BelongsToCompany;
@@ -25,5 +30,17 @@ class SupplierPayment extends Model
             'amount' => 'decimal:4',
             'paid_at' => 'immutable_datetime',
         ];
+    }
+
+    /** @return BelongsTo<SupplierBill, $this> */
+    public function bill(): BelongsTo
+    {
+        return $this->belongsTo(SupplierBill::class, 'supplier_bill_id');
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function payer(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'paid_by');
     }
 }

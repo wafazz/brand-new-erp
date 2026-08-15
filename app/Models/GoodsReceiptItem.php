@@ -32,4 +32,10 @@ class GoodsReceiptItem extends Model
     {
         return $this->belongsTo(PurchaseOrderItem::class, 'purchase_order_item_id');
     }
+
+    /** @return BelongsTo<ProductVariant, $this> */
+    public function variant(): BelongsTo
+    {
+        return $this->belongsTo(ProductVariant::class, 'product_variant_id');
+    }
 }

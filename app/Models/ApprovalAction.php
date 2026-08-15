@@ -40,4 +40,10 @@ class ApprovalAction extends Model
     {
         return $this->belongsTo(ApprovalRequest::class, 'approval_request_id');
     }
+
+    /** @return BelongsTo<User, $this> */
+    public function actor(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'actor_user_id');
+    }
 }

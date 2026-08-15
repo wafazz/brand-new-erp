@@ -244,3 +244,45 @@ it('changes the commission a margin plan computes', function (): void {
     expect($margins['before'])->toBe('40.0000')
         ->and($margins['after'])->toBe('44.0000');
 });
+
+it('apportions freight by weight, which is neither the value nor the quantity split', function (): void {
+    $w = landedWorld();
+
+    inLanded($w['company'], function () use ($w): void {
+        $w['pricey']->forceFill(['weight_grams' => 300])->save();
+    });
+
+    receiveAll($w);
+
+    inLanded($w['company'], function (): void {
+        $receipt = GoodsReceipt::query()->firstOrFail();
+        app(CostingService::class)->addLandedCost($receipt, 'freight', '400.0000', 'by_weight');
+    });
+
+    expect((string) $w['cheap']->refresh()->average_cost)->toBe('50.0000')
+        ->and((string) $w['pricey']->refresh()->average_cost)->toBe('190.0000');
+});
+
+it('apportions nothing by weight when no variant carries a weight', function (): void {
+    $w = landedWorld();
+
+    inLanded($w['company'], function () use ($w): void {
+        $w['cheap']->forceFill(['weight_grams' => null])->save();
+        $w['pricey']->forceFill(['weight_grams' => null])->save();
+    });
+
+    receiveAll($w);
+
+    $basis = inLanded($w['company'], function () use ($w): array {
+        $receipt = GoodsReceipt::query()->firstOrFail();
+        app(CostingService::class)->addLandedCost($receipt, 'freight', '400.0000', 'by_weight');
+
+        return GoodsReceiptItem::query()
+            ->where('product_variant_id', $w['cheap']->getKey())
+            ->firstOrFail()
+            ->landed_cost_basis;
+    });
+
+    expect((string) $w['cheap']->refresh()->average_cost)->toBe('40.0000')
+        ->and($basis['components'][0]['basis'])->toContain('No by_weight basis exists');
+});

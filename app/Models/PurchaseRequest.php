@@ -8,9 +8,14 @@ use App\Contracts\Scopeable;
 use App\Models\Concerns\AppliesDataScope;
 use App\Models\Concerns\BelongsToCompany;
 use App\Models\Concerns\HasUlid;
+use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
+/**
+ * @property ?CarbonImmutable $needed_by
+ */
 class PurchaseRequest extends Model implements Scopeable
 {
     use AppliesDataScope;
@@ -34,6 +39,18 @@ class PurchaseRequest extends Model implements Scopeable
     public function items(): HasMany
     {
         return $this->hasMany(PurchaseRequestItem::class);
+    }
+
+    /** @return BelongsTo<User, $this> */
+    public function requester(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'requested_by');
+    }
+
+    /** @return BelongsTo<Branch, $this> */
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class);
     }
 
     public static function ownerColumn(): ?string
