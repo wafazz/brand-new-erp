@@ -18,12 +18,12 @@ class PosRegister extends Model
     /** @var array<string, mixed> */
     protected $attributes = ['is_active' => true];
 
-    protected $fillable = ['branch_id', 'warehouse_id', 'code', 'name', 'is_active'];
+    protected $fillable = ['branch_id', 'warehouse_id', 'code', 'name', 'refund_limit', 'is_active'];
 
     /** @return array<string, string> */
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'refund_limit' => 'decimal:4'];
     }
 
     /** @return BelongsTo<Branch, $this> */

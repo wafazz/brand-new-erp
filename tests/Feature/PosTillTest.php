@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use App\Domain\Commission\CommissionEngine;
 use App\Domain\Inventory\InsufficientStock;
+use App\Domain\Orders\OrderStateMachine;
 use App\Domain\Pos\PosService;
 use App\Domain\Pos\TillRefused;
 use App\Domain\Reporting\RollupService;
@@ -30,6 +31,7 @@ use Database\Seeders\ModuleSeeder;
 use Database\Seeders\PermissionSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
+use Spatie\Permission\PermissionRegistrar;
 
 beforeEach(function (): void {
     $this->seed(PermissionSeeder::class);
@@ -662,5 +664,168 @@ it('keeps a returned sale out of revenue', function (): void {
 
         expect((string) SalesRollup::query()->sum('revenue'))
             ->toBe('50.0000', 'a refunded half must not still count as revenue');
+    });
+});
+
+it('refuses a cashier refunding a sale from another session', function (): void {
+    $f = tillFixture('20', '25');
+
+    $sale = $this->withCompany($f['company'], function () use ($f): Order {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '1']],
+            [['method' => 'cash', 'amount' => '25']],
+            $f['alice'],
+        );
+
+        till()->closeSession($session->refresh(), '25', $f['alice']);
+
+        return $sale;
+    });
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($f['company']->getKey());
+
+        expect($f['alice']->can('pos.sell'))->toBeTrue('the cashier can sell')
+            ->and($f['alice']->can('pos.manage'))->toBeFalse('but is not a supervisor');
+
+        $today = till()->openSession($f['register']->refresh(), $f['alice'], '0');
+
+        expect(fn () => till()->refund($today, $sale->refresh(), 'Yesterday was a mistake', $f['alice']))
+            ->toThrow(TillRefused::class, 'different till session');
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('19.0000', 'the goods stayed sold');
+    });
+});
+
+it('lets a supervisor refund a sale from an earlier session', function (): void {
+    $f = tillFixture('20', '25');
+
+    $sale = $this->withCompany($f['company'], function () use ($f): Order {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '1']],
+            [['method' => 'cash', 'amount' => '25']],
+            $f['alice'],
+        );
+
+        till()->closeSession($session->refresh(), '25', $f['alice']);
+
+        return $sale;
+    });
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($f['company']->getKey());
+
+        expect($f['owner']->can('pos.manage'))->toBeTrue('an owner supervises the till');
+
+        $today = till()->openSession($f['register']->refresh(), $f['owner'], '0');
+
+        till()->refund($today, $sale->refresh(), 'Customer came back the next day', $f['owner']);
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('20.0000');
+    });
+});
+
+it('stops a cashier refunding more than the register allows', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $f['register']->forceFill(['refund_limit' => '30'])->save();
+
+        $session = till()->openSession($f['register']->refresh(), $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '4']],
+            [['method' => 'cash', 'amount' => '100']],
+            $f['alice'],
+        );
+
+        expect(fn () => till()->refund($session->refresh(), $sale->refresh(), 'All of it', $f['alice']))
+            ->toThrow(TillRefused::class, 'A supervisor has to take it');
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('16.0000', 'nothing came back');
+
+        $item = $sale->items()->firstOrFail();
+
+        till()->refund($session->refresh(), $sale->refresh(), 'Just one', $f['alice'], [
+            ['order_item_id' => $item->getKey(), 'quantity' => '1'],
+        ]);
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('17.0000', 'a refund inside the limit is fine');
+    });
+});
+
+it('lets a supervisor exceed the register refund limit', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $f['register']->forceFill(['refund_limit' => '30'])->save();
+
+        $session = till()->openSession($f['register']->refresh(), $f['owner'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '4']],
+            [['method' => 'cash', 'amount' => '100']],
+            $f['owner'],
+        );
+
+        till()->refund($session->refresh(), $sale->refresh(), 'Whole lot faulty', $f['owner']);
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('20.0000');
+    });
+});
+
+it('puts stock back when a return is recorded away from the till', function (): void {
+    $f = tillFixture('20', '25');
+
+    $sale = $this->withCompany($f['company'], function () use ($f): Order {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        return till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '3']],
+            [['method' => 'cash', 'amount' => '75']],
+            $f['alice'],
+        );
+    });
+
+    $this->withCompany($f['company'], function () use ($f, $sale): void {
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('17.0000');
+
+        app(OrderStateMachine::class)
+            ->transition($sale->refresh(), ExceptionStatus::Returned, $f['owner'], 'Returned by post');
+
+        $item = $sale->items()->firstOrFail();
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('20.0000', 'the order screen must move stock too')
+            ->and((string) $item->fresh()?->quantity_returned)->toBe('3.0000')
+            ->and((string) $sale->fresh()?->returned_amount)->toBe('75.0000');
+    });
+});
+
+it('does not put stock back twice when the till already returned it', function (): void {
+    $f = tillFixture('20', '25');
+
+    $this->withCompany($f['company'], function () use ($f): void {
+        $session = till()->openSession($f['register'], $f['alice'], '0');
+
+        $sale = till()->sell(
+            $session,
+            [['variant_id' => $f['variant']->getKey(), 'quantity' => '2']],
+            [['method' => 'cash', 'amount' => '50']],
+            $f['alice'],
+        );
+
+        till()->refund($session->refresh(), $sale->refresh(), 'Faulty', $f['alice']);
+
+        expect((string) $f['stock']->fresh()?->on_hand)->toBe('20.0000')
+            ->and((string) $sale->fresh()?->returned_amount)->toBe('50.0000', 'counted once, not twice');
     });
 });

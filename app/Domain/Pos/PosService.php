@@ -134,6 +134,13 @@ class PosService
             throw new TillRefused('That sale was not taken at a till, so it cannot be refunded at one.');
         }
 
+        if ($sale->pos_session_id !== $session->getKey() && ! $actor->can('pos.manage')) {
+            throw new TillRefused(
+                'That sale was rung up on a different till session. A supervisor has to refund it, '.
+                'so a cashier cannot quietly reverse yesterday\'s takings.'
+            );
+        }
+
         if ($sale->exception_status === ExceptionStatus::Returned) {
             throw new TillRefused("Sale {$sale->order_number} has already been refunded.");
         }
@@ -151,6 +158,8 @@ class PosService
 
             $wanted = $this->resolveLines($locked, $lines);
             $value = $this->returnStock($locked, $session, $actor, $wanted);
+
+            $this->assertWithinRefundLimit($session, $value, $actor);
 
             $locked->forceFill([
                 'returned_amount' => Money::of((string) $locked->returned_amount, $locked->currency)
@@ -359,6 +368,24 @@ class PosService
         }
 
         return $wanted;
+    }
+
+    private function assertWithinRefundLimit(PosSession $session, Money $value, User $actor): void
+    {
+        $limit = $session->register?->refund_limit;
+
+        if ($limit === null || $actor->can('pos.manage')) {
+            return;
+        }
+
+        $ceiling = Money::of((string) $limit);
+
+        if ($value->greaterThan($ceiling)) {
+            throw new TillRefused(
+                "This refund comes to {$value->format()} and this register lets a cashier refund up to ".
+                "{$ceiling->format()}. A supervisor has to take it."
+            );
+        }
     }
 
     private function everythingReturned(Order $order): bool

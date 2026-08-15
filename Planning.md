@@ -3278,7 +3278,7 @@ neighbouring line does its job for it.** Planting finds both.
 | W-2 | A refund can only be taken at an open till, and returns the money to that drawer. A customer returning to a different branch has no path |
 | W-3 | The receipt prints from the browser. No hardware, no cash drawer kick, no thermal-printer formatting |
 | W-4 | No exchange flow — a return followed by a new sale is two separate transactions |
-| W-5 | Refunds are not restricted by age or supervisor approval. Any cashier can refund any till sale in full |
+| W-5 ✔ | ~~Refunds are not restricted~~ **CLOSED** — a cashier may refund only sales from their own open session, and only up to the register's refund limit. Anything else needs `pos.manage` |
 
 
 ---
@@ -3346,5 +3346,70 @@ anchor was not unique, which is the script working as intended rather than guess
 |---|---|
 | X-1 | **Revenue was overstated by every refund until today.** No production data exists, so nothing needs restating — but any figure quoted from an earlier build was wrong by the value of its refunds |
 | X-2 | A part return refunds tenders proportionally. Real shops often refund cash first regardless of how it was paid; this is a policy choice the system currently makes for you |
-| X-3 | Still open from Appendix W: refunds only at an open till, to that drawer (W-2); no exchange flow (W-4); no supervisor approval or age limit on refunds (W-5) |
-| X-4 | `quantity_returned` is now written by the till only. A return recorded through the order screens still does not touch it |
+| X-3 ~ | Still open from Appendix W: refunds only at an open till, to that drawer (W-2); no exchange flow (W-4). Supervisor control is now in place (W-5 closed) |
+| X-4 ✔ | ~~`quantity_returned` is written by the till only~~ **CLOSED** — a return recorded anywhere puts the goods back, and the take-back is idempotent so the two paths cannot double-count |
+
+
+---
+
+## Appendix Y — Closing the refund hole, and one truth in two places (2026-08-15)
+
+Two items from the POS review, both defects rather than gaps.
+
+### W-5: a cashier could reverse yesterday's takings
+
+Refunds were built because a till without them is unusable. The control that stops them being abused
+was not, and that is the classic retail theft route: ring a sale, pocket the cash, refund it after
+the customer has gone.
+
+Two rules now, both enforced in `PosService`:
+
+- **A cashier may only refund a sale from the session they are standing at.** Anything older needs
+  `pos.manage`. This is the rule that closes the theft route, because the cash a cashier can reverse
+  is cash still sitting in the drawer they are about to have counted.
+- **A refund above the register's `refund_limit` needs `pos.manage`.** The limit is nullable, so a
+  shop that does not want one is not forced into it.
+
+The escalation is *"a supervisor performs it"*, not *"a supervisor approves it"*. No PIN pad, no
+override dialogue — the person with the permission has to be the one signed in. That is weaker in
+convenience and stronger in evidence: the audit trail names who actually did it, with no shared
+override code to borrow.
+
+### X-4: the same event meant two different things
+
+The till wrote `quantity_returned` and put goods back on the shelf. Marking an order returned from
+the **order screen** did neither — it set a status and left the stock sold.
+
+One event, two behaviours, depending on which screen you used. That is worse than a missing feature,
+because the numbers disagree quietly.
+
+`SyncStockWithFulfilment` now handles `ExceptionStatus::Returned` the way it already handles
+`Allocated` and `Shipped`. It returns whatever is still outstanding, sets `quantity_returned`, and
+adds to `returned_amount`.
+
+**The take-back is idempotent by construction** — it only moves what has not already come back. So
+the POS path, which has already returned everything before it transitions, finds nothing to do. That
+matters: this project has now double-counted stock twice from duplicated listeners (P4, and again in
+Appendix V), and this design cannot do it a third time. Proven by a test that refunds through the
+till and asserts stock came back once, and by planting the removal of the outstanding check.
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` · `phpstan` · `tsc` | pass |
+| `pest` | **1,584 passed / 3,174 assertions** |
+| CI-equivalent run | fresh database, no compiled frontend, `.env` from `.env.example` — all pass |
+
+Five guards proven by planting: cross-session escalation, the refund limit, the supervisor
+exemption, the order-screen take-back, and its idempotence.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| Y-1 | The refund limit is per register and set in the database — **there is no screen for it**. A shop cannot change its own limit without a developer |
+| Y-2 | A supervisor still has no limit at all. There is no daily refund total, no report of who refunded what |
+| Y-3 | An order-screen return puts stock back but **refunds no money** — correct while credit notes do not exist, but it leaves the customer owed |
+| Y-4 | Still open: no exchange flow (W-4), no cross-branch returns (W-2), no held sales (V-3) |
+| Y-5 | Still true: **no screen has been used by a human** |

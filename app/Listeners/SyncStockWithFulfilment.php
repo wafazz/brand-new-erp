@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace App\Listeners;
 
 use App\Domain\Inventory\InventoryService;
+use App\Domain\Inventory\StockReason;
 use App\Enums\ExceptionStatus;
 use App\Enums\FulfilmentStatus;
 use App\Events\OrderStatusChanged;
@@ -12,6 +13,7 @@ use App\Models\Order;
 use App\Models\PosSession;
 use App\Models\StockReservation;
 use App\Models\Warehouse;
+use App\Support\Money;
 
 class SyncStockWithFulfilment
 {
@@ -23,6 +25,7 @@ class SyncStockWithFulfilment
             $event->to === FulfilmentStatus::Allocated => $this->reserve($event->order),
             $event->to === FulfilmentStatus::Shipped => $this->commit($event->order, $event),
             $event->to === ExceptionStatus::Cancelled => $this->release($event->order),
+            $event->to === ExceptionStatus::Returned => $this->takeBack($event->order, $event),
             default => null,
         };
     }
@@ -80,6 +83,46 @@ class SyncStockWithFulfilment
         foreach ($order->items()->get() as $item) {
             $item->forceFill(['quantity_allocated' => '0'])->save();
         }
+    }
+
+    private function takeBack(Order $order, OrderStatusChanged $event): void
+    {
+        $warehouse = $this->warehouseFor($order);
+
+        if ($warehouse === null) {
+            return;
+        }
+
+        $returned = Money::of((string) $order->returned_amount, $order->currency);
+
+        foreach ($order->items()->get() as $item) {
+            $outstanding = bcsub((string) $item->quantity, (string) $item->quantity_returned, 4);
+
+            if (bccomp($outstanding, '0', 4) !== 1) {
+                continue;
+            }
+
+            if ($item->product_variant_id !== null) {
+                $stock = $this->inventory->lineFor($item->product_variant_id, $warehouse);
+
+                $this->inventory->receive(
+                    $stock,
+                    $outstanding,
+                    StockReason::Returned,
+                    $order,
+                    $event->actor,
+                    "Returned on {$order->order_number}.",
+                );
+            }
+
+            $item->forceFill(['quantity_returned' => (string) $item->quantity])->save();
+
+            $returned = $returned->plus(
+                Money::of((string) $item->unit_price, $order->currency)->times($outstanding)
+            );
+        }
+
+        $order->forceFill(['returned_amount' => $returned->toDecimal()])->save();
     }
 
     private function warehouseFor(Order $order): ?Warehouse
