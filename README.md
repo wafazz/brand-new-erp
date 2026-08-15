@@ -248,12 +248,12 @@ composer gate          # Pint + PHPStan + Pest
 ./vendor/bin/pest
 ```
 
-**1,743 tests, 3,623 assertions**, in six suites that each do a different job:
+**1,746 tests, 3,629 assertions**, in six suites that each do a different job:
 
 | Suite | What it protects |
 |---|---|
 | `Unit` | Money arithmetic, enums, the permission registry |
-| `Architecture` | Source-level rules — no unscoped raw queries, status columns written only by the state machine, every module route resolves |
+| `Architecture` | Source-level rules — no unscoped raw queries, status columns written only by the state machine, every module route resolves, **every artifact a closed phase claims actually exists** |
 | `Isolation` | Company isolation and data scope. **Reflection-driven** — a new scoped model is covered the moment it exists |
 | `Feature` | Domain behaviour end to end, plus query budgets |
 | `Concurrency` | Real multi-process races: document numbering, stock reservation, order transitions |
@@ -282,7 +282,10 @@ Stated plainly, because a README that only lists strengths is not useful.
 - **Not one real payment has been taken.** The Billplz integration is implemented from the published
   specification and every test fakes the HTTP layer. It has never been confirmed against a live
   sandbox callback.
-- No exports, no credit notes, no 2FA, no password reset by email.
+- **No exports.** Nothing leaves this system in any format — no CSV, no PDF, no trial balance.
+- **No credit notes.** A wrong invoice can only be voided.
+- No quotations, no delivery-order document, no stock count, no promo codes, no company admin screen.
+- No 2FA, no password reset by email, no mail transport of any kind.
 - Attribution cannot yet be captured from the web — no UTM or landing-page endpoint, so the campaign
   on an order must be set deliberately.
 - No setup screens for price lists, territories, referral codes or approval flows.

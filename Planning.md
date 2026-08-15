@@ -1485,14 +1485,14 @@ Derived from the dependency graph (§5), not from the brief's example. Each phas
 | Phase    | Name                    | Contents                                                                                                                                                                                                                               | Exit gate                                                                                                                                                                                     |
 | -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **P0 ✔** | Foundation              | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | **GATE CLOSED 2026-08-15** — see Appendix C                                                                                                                                                   |
-| **P1 ✔** | Access                  | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/User admin, Audit log. *(**Department admin was listed here and never built** — corrected 2026-08-16, see Appendix AE)*                                                                                                  | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test                                                    |
+| **P1 ✔** | Access                  | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Branch and User admin, Audit log. *(**Department admin** and **company admin** were listed here and never built — corrected 2026-08-16, see Appendices AE and AI)*                                                                    | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test                                                    |
 | **P2 ✔** | Master data             | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering                                                                                                                                     | Price resolution returns a decomposition; numbering unique under concurrency                                                                                                                  |
-| **P3 ✔** | Orders                  | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment                                                                                                                         | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason                                                                                |
-| **P4 ✔** | Inventory & Purchasing  | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine                                                                                                                                 | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks                                                                               |
-| **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain**                                                                                                     | All 12 attribution questions answered by a named tested query                                                                                                                                 |
-| **P6 ✔** | Commission              | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting                                                                        | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
-| **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes                                                                                                                                                         | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
-| **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, exports                                                                                                                                                                                     | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
+| **P3 ✔** | Orders                  | Order + items + three-axis state machine + mutability policy + `order_events`, Order→Invoice→Payment. *(**Quotation and delivery order were listed and never built** — corrected 2026-08-16, see Appendix AI. Shipped/Delivered are fulfilment statuses, not documents)*                                                    | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason                                                                                |
+| **P4 ✔** | Inventory & Purchasing  | Warehouses, stock, reservations, movements, transfers; PR→PO→GRN→Bill→Payment; Approval engine. *(**Stock counts were listed and never built** — corrected 2026-08-16, see Appendix AI)*                                                                                                                                   | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks                                                                               |
+| **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral codes; **Attribution domain**. *(**Promo codes were listed and never built** — corrected 2026-08-16, see Appendix AI)*                                                                                                      | All 12 attribution questions answered by a named tested query                                                                                                                                 |
+| **P6 ✔** | Commission              | Plans, immutable versioned rules, strategies, synchronous calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting. *(**"Queued calculation" was listed and is false** — nothing in this project implements `ShouldQueue` — corrected 2026-08-16, see Appendix AI)*        | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
+| **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds. *(**Credit notes were listed and never built** — corrected 2026-08-16, see Appendix AI. A wrong invoice can only be voided)*                                                                                                                             | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
+| **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups. *(**Exports were listed and never built** — corrected 2026-08-16, see Appendix AI. There is no way to get data out of this system)*                                                                                                                                             | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
 | **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
 | **P10 ~** | Optional modules       | **HR ~** (leave), Payroll, **POS ✔**, **CRM ✔**, Projects, Assets, Tickets, **Subscriptions ✔**, **Online payment ✔** (Billplz)                                                                                                        | Per module. POS — V–AA. CRM — AB. HR leave — AD. Subscriptions — AF. Billplz — AG                                                                                                             |
 
@@ -4096,3 +4096,71 @@ end state, at least one test must assert something only one of them controls.
 | AH-4 | No dunning. AF-5 stands — nothing chases an unpaid invoice or reports which unpaid invoices are recurring revenue |
 | AH-5 | The sweep is company-by-company and serial. With many companies and many overdue invoices, one slow Billplz response delays the rest |
 | AH-6 | Still true: **no screen has been used by a human** |
+
+
+---
+
+## Appendix AI — Auditing the closed gates, and what the table was claiming (2026-08-16)
+
+AE-2 read: *"Other closed gates may carry the same overstatement. Nobody has re-read P0–P8 against
+what actually exists."* Fakrul asked for a readiness figure, which made the phase table the primary
+evidence, so the audit finally happened.
+
+**Seven of the nine closed phases described features that were never built.**
+
+| Phase | Claimed | Reality |
+|---|---|---|
+| P1 | Company/Branch/User admin | No company admin screen or route exists. Branch and user admin do |
+| P3 | Quotation→SO→DO→Invoice→Payment | No quotation, no delivery order. `Shipped` and `Delivered` are fulfilment statuses, not documents |
+| P4 | transfers, **counts** | No stock count. Physical inventory cannot be reconciled |
+| P5 | referral/**promo** codes | Referral codes exist. Promo codes do not |
+| P6 | **queued** calculation | Nothing in this project implements `ShouldQueue`. Commission is calculated synchronously |
+| P7 | credit notes | Absent. A wrong invoice can only be voided |
+| P8 | exports | Absent. **There is no way to get data out of this system** |
+
+### The distinction that matters
+
+**Every exit gate still holds.** The gates are narrow, testable conditions — *"no status logic outside
+the state machine"*, *"`SUM(movements) == on_hand`"*, *"every dashboard figure scope-filtered"* — and
+each remains satisfied by a passing test. Nothing here reopens a phase.
+
+What failed was the **Contents** column, which was written as a plan and never trimmed to what
+shipped. The gate said what had to be proven; the contents said what was intended; only the first was
+ever checked. For nine phases the second quietly became a claim about the present tense.
+
+That is a different and more insidious failure than a broken test. A green suite cannot detect a
+sentence, and I had been treating the phase table as a record when it was still a proposal.
+
+### Two of these are not documentation problems
+
+`exports` and `credit notes` were listed because a functioning ERP needs them, and that reasoning was
+correct. Their absence is a real gap:
+
+- **No exports** means the data is trapped. An accountant cannot take a trial balance to anyone.
+- **No credit notes** means an incorrect invoice can only be voided, which is not the same thing and
+  is not always permissible.
+
+They are now stated as missing in `README.md` rather than implied as present.
+
+### What now guards this
+
+`tests/Architecture/PhaseManifestTest.php` turns the table's claims into a checked manifest: every
+class, table, route and file a closed phase depends on must exist, and the seven corrected phrases
+must not reappear in the phase table. Both halves were verified by planting — restoring
+*"refunds, credit notes"* to the P7 row fails the suite, as does naming an artifact that is not there.
+
+It cannot check prose in general. Nothing can. What it can do is stop these seven specific claims
+from being restored without the code, and fail loudly if a manifest entry is deleted to make a phase
+look closed.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| AI-1 | **No exports.** Nothing leaves this system in any format. The most important functional gap found by this audit |
+| AI-2 | **No credit notes.** Voiding is the only correction available |
+| AI-3 | No quotations and no delivery-order document |
+| AI-4 | No stock count, so physical inventory cannot be reconciled against recorded on-hand |
+| AI-5 | No promo codes; no company-level admin screen |
+| AI-6 | The manifest pins today's claims. It cannot tell whether a **future** row is honest — that still needs a human re-reading the table against the code |
+| AI-7 | Still true: **no screen has been used by a human** |
