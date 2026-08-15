@@ -45,6 +45,8 @@ php artisan migrate --force
 php artisan db:seed --class=PermissionSeeder --force
 php artisan db:seed --class=ModuleSeeder --force
 
+php artisan erp:sync-roles
+
 php artisan config:cache
 php artisan route:cache
 php artisan view:cache
@@ -55,31 +57,16 @@ sudo chmod -R 775 storage bootstrap/cache
 
 ### Create the first company and owner
 
-No seeder creates a user, by design. Create the first account interactively via `php artisan tinker`
-so no known credential is ever committed:
+No seeder creates a user, by design. Create the first account with the interactive command, which
+never accepts the password as an argument:
 
-```php
-$company = App\Models\Company::create(['name' => 'Client Sdn Bhd', 'slug' => 'client']);
-app(App\Services\Access\RoleProvisioner::class)->provision($company);
-
-$user = App\Models\User::create([
-    'name' => 'Owner Name',
-    'email' => 'owner@client.test',
-    'password' => 'CHANGE-THIS-IMMEDIATELY',
-]);
-
-app(App\Support\CompanyContext::class)->runAs($company->id, function () use ($company, $user) {
-    app(Spatie\Permission\PermissionRegistrar::class)->setPermissionsTeamId($company->id);
-    App\Models\Branch::create(['code' => 'HQ', 'name' => 'Head Office', 'is_default' => true]);
-    App\Models\Warehouse::create(['code' => 'MAIN', 'name' => 'Main Warehouse', 'is_default' => true]);
-    App\Models\CompanyUser::create(['user_id' => $user->id, 'role' => 'owner', 'is_active' => true]);
-    $user->assignRole('owner');
-});
-
-$user->forceFill(['active_company_id' => $company->id])->save();
+```bash
+php artisan erp:create-owner
 ```
 
-Then have the owner change the password before anyone else is given access.
+It prompts for the company name, the owner's name and email, then twice for a password (minimum 12
+characters). It creates the company, provisions its roles, adds a default HQ branch and Main
+warehouse, assigns the `owner` role and sets the active company.
 
 ---
 
@@ -180,10 +167,23 @@ a backup nobody has restored is a hope, not a backup.
 - [ ] `php artisan about` shows `Debug Mode: OFF` and `Environment: production`
 - [ ] `php artisan erp:backup` writes a dump, and `php artisan erp:verify-backup` exits 0
 - [ ] Queue workers are processing (`php artisan horizon:status`)
+- [ ] The sidebar shows every module the signed-in role should have, and no entry 404s
+- [ ] A salesperson signed in sees no Branches, Suppliers or Inventory entry
+- [ ] A salesperson POSTing directly to `/orders/{id}/transition` with `status=approved` gets 403
+- [ ] A storekeeper POSTing directly to `/supplier-bills/{id}/approve` gets 403
+- [ ] A non-owner administrator cannot select `owner` when adding a person, and a posted
+      `role=owner` is refused
+- [ ] The owner cannot demote or deactivate themselves, and cannot be demoted while they are the
+      only active owner
+- [ ] Every account added through **People** changes its password from `/profile` before use
+- [ ] Receiving goods against a purchase order moves stock and writes a `stock_movements` row
 
 ---
 
 ## 8. Rollback
+
+> **After any upgrade, run `php artisan erp:sync-roles`.** Permissions added by a release do not
+> reach existing companies until you do. Tuned data scopes are preserved.
 
 ```bash
 git checkout <previous-tag>

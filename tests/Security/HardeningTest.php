@@ -2,13 +2,18 @@
 
 declare(strict_types=1);
 
+use App\Enums\CompanyRole;
+use App\Models\Company;
 use App\Models\User;
+use App\Services\Access\RoleProvisioner;
+use Database\Seeders\PermissionSeeder;
 use Illuminate\Contracts\Http\Kernel;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
+use Spatie\Permission\PermissionRegistrar;
 
 it('never stores a password in plain text', function (): void {
     $user = User::create([
@@ -93,6 +98,27 @@ it('serves no unauthenticated route from the private disk', function (): void {
 
 it('gates the queue dashboard behind an explicit permission', function (): void {
     expect(Gate::has('viewHorizon'))->toBeTrue('Horizon has no explicit gate, so access depends on the environment alone.');
+
+    expect(Gate::forUser(null)->allows('viewHorizon'))
+        ->toBeFalse('the queue dashboard must never be open to a guest.');
+});
+
+it('opens the queue dashboard only to a role holding modules.manage', function (): void {
+    $this->seed(PermissionSeeder::class);
+
+    $company = Company::create(['name' => 'Horizon Co', 'slug' => 'horizon-'.str()->random(6)]);
+    app(RoleProvisioner::class)->provision($company);
+
+    $owner = person($company, CompanyRole::Owner, 'hz-owner@acme.test');
+    $clerk = person($company, CompanyRole::Staff, 'hz-staff@acme.test');
+
+    $this->withCompany($company, function () use ($company, $owner, $clerk): void {
+        app(PermissionRegistrar::class)->setPermissionsTeamId($company->getKey());
+
+        expect($clerk->can('modules.manage'))->toBeFalse('a staff account must not hold modules.manage')
+            ->and(Gate::forUser($clerk)->allows('viewHorizon'))->toBeFalse('staff must not reach the queue dashboard')
+            ->and(Gate::forUser($owner)->allows('viewHorizon'))->toBeTrue('an owner must reach the queue dashboard');
+    });
 });
 
 it('answers the root path only to GET', function (): void {

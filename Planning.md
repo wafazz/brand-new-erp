@@ -27,11 +27,11 @@ document says **absent** rather than assuming.
 
 Three sibling codebases were inspected in depth. They are referenced throughout as:
 
-| Short name | Path | What it is |
-|---|---|---|
-| **SMEOS** | `../SMEOS` | Multi-tenant B2B SaaS "business command center", Laravel 12 + PostgreSQL 16. P0–P3 shipped, 40 commits, ~291 tests |
-| **OMS** | `../SaaS-OMS` | Order + fulfilment engine, Laravel 13.8 + MariaDB 11.8. 465 tests / 2084 assertions |
-| **DZI** | `../dzi-holistik-ordering-system` | Single-tenant ordering + commission + marketing-spend system, Laravel 12, 47 models, 76 migrations |
+| Short name | Path                              | What it is                                                                                                         |
+| ---------- | --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| **SMEOS**  | `../SMEOS`                        | Multi-tenant B2B SaaS "business command center", Laravel 12 + PostgreSQL 16. P0–P3 shipped, 40 commits, ~291 tests |
+| **OMS**    | `../SaaS-OMS`                     | Order + fulfilment engine, Laravel 13.8 + MariaDB 11.8. 465 tests / 2084 assertions                                |
+| **DZI**    | `../dzi-holistik-ordering-system` | Single-tenant ordering + commission + marketing-spend system, Laravel 12, 47 models, 76 migrations                 |
 
 Two further systems were read for commission modelling only: `../saas-multi-tenant-AgentStockit-Management-System` (**AgentStockit**) and `../SAAS-Agent-Management-System` (**AgentMgmt**).
 
@@ -73,14 +73,14 @@ Three headline design positions, each argued in full below:
 
 ## 2. Business Objectives
 
-| # | Objective | Success measure |
-|---|---|---|
-| BO-1 | Let an SME run customers, products, orders, stock, purchasing and money in one system | A trading SME can operate a full month without a spreadsheet |
-| BO-2 | Attribute every order to its true commercial origin | Any order answers all 12 attribution questions in §14 |
-| BO-3 | Pay marketers, salespeople and teams correctly and explainably | Every commission renders a plain-language explanation naming rule, basis, rate and source orders |
-| BO-4 | Let each SME enable only the modules it needs | A services SME can run with Inventory and Purchasing disabled and see no dead nav |
-| BO-5 | Enforce who-sees-what at the data layer | A salesperson cannot read another salesperson's orders through any route, export, report or API |
-| BO-6 | Stay extensible | Adding a module touches the module registry and its own namespace, not the kernel |
+| #    | Objective                                                                             | Success measure                                                                                  |
+| ---- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| BO-1 | Let an SME run customers, products, orders, stock, purchasing and money in one system | A trading SME can operate a full month without a spreadsheet                                     |
+| BO-2 | Attribute every order to its true commercial origin                                   | Any order answers all 12 attribution questions in §14                                            |
+| BO-3 | Pay marketers, salespeople and teams correctly and explainably                        | Every commission renders a plain-language explanation naming rule, basis, rate and source orders |
+| BO-4 | Let each SME enable only the modules it needs                                         | A services SME can run with Inventory and Purchasing disabled and see no dead nav                |
+| BO-5 | Enforce who-sees-what at the data layer                                               | A salesperson cannot read another salesperson's orders through any route, export, report or API  |
+| BO-6 | Stay extensible                                                                       | Adding a module touches the module registry and its own namespace, not the kernel                |
 
 **Explicit non-objectives for v1:** full double-entry accounting, manufacturing/MRP, payroll,
 POS hardware integration, native mobile apps, public API.
@@ -91,12 +91,12 @@ POS hardware integration, native mobile apps, public API.
 
 The architecture must serve at least these four without forcing unused modules on any of them.
 
-| Profile | Shape | Modules used | Attribution need |
-|---|---|---|---|
-| **P-A — Social-commerce trader** | Sells via FB/IG/WhatsApp/TikTok, marketers generate leads, closers convert | Orders, Products, Inventory, Marketing, Commission, Finance | **Highest.** Campaign → marketer → lead → order → commission is the whole business |
-| **P-B — B2B distributor** | Field sales team, territories, credit terms, purchase orders | Customers, Suppliers, Orders, Purchasing, Inventory, Sales Team, Commission, Finance | Salesperson + team, not campaign |
-| **P-C — Multi-branch retail/service** | 2–8 branches, branch managers, branch stock | Branches, Products, Orders, Inventory, RBAC scope, Finance | Branch + channel |
-| **P-D — Agent/reseller network** | Tiered resellers buying at tier price and reselling | Products (tier pricing), Orders, Commission (margin model), Inventory | Upline/downline |
+| Profile                               | Shape                                                                      | Modules used                                                                         | Attribution need                                                                   |
+| ------------------------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------- |
+| **P-A — Social-commerce trader**      | Sells via FB/IG/WhatsApp/TikTok, marketers generate leads, closers convert | Orders, Products, Inventory, Marketing, Commission, Finance                          | **Highest.** Campaign → marketer → lead → order → commission is the whole business |
+| **P-B — B2B distributor**             | Field sales team, territories, credit terms, purchase orders               | Customers, Suppliers, Orders, Purchasing, Inventory, Sales Team, Commission, Finance | Salesperson + team, not campaign                                                   |
+| **P-C — Multi-branch retail/service** | 2–8 branches, branch managers, branch stock                                | Branches, Products, Orders, Inventory, RBAC scope, Finance                           | Branch + channel                                                                   |
+| **P-D — Agent/reseller network**      | Tiered resellers buying at tier price and reselling                        | Products (tier pricing), Orders, Commission (margin model), Inventory                | Upline/downline                                                                    |
 
 P-A and P-D are the profiles that justify this project existing rather than buying an
 off-the-shelf ERP. **P-C is the profile that forces branch into the scope model from day one.**
@@ -107,30 +107,30 @@ off-the-shelf ERP. **P-C is the profile that forces branch into the scope model 
 
 Core (22), matching the brief. `is_core` modules cannot be disabled.
 
-| # | Module | Key | Core? | Notes |
-|---|---|---|---|---|
-| 1 | Dashboard | `dashboard` | ✔ | Role-aware; five variants (§20) |
-| 2 | Company Management | `companies` | ✔ | The tenant entity |
-| 3 | Branch Management | `branches` | ✔ | Kernel dependency — see §5 |
-| 4 | User Management | `users` | ✔ | |
-| 5 | RBAC / Authorization | `access` | ✔ | Kernel, not a module in the disableable sense |
-| 6 | Customer Management | `customers` | ✔ | |
-| 7 | Supplier Management | `suppliers` | | |
-| 8 | Product Management | `products` | ✔ | |
-| 9 | Order Management | `orders` | ✔ | Central transaction engine |
-| 10 | Sales Management | `sales` | | Quotation → SO → DO → Invoice → Payment |
-| 11 | Sales Team Management | `sales_teams` | | |
-| 12 | Marketer Management | `marketers` | | |
-| 13 | Marketing / Campaign | `campaigns` | | |
-| 14 | Marketing Attribution | `attribution` | | Domain service; surfaces as reports |
-| 15 | Commission | `commission` | | |
-| 16 | Inventory | `inventory` | | |
-| 17 | Purchasing | `purchasing` | | |
-| 18 | Finance | `finance` | | |
-| 19 | Reporting | `reports` | | |
-| 20 | Approval Workflow | `approvals` | ✔ | Kernel service; other modules register approvables |
-| 21 | Audit Log | `audit` | ✔ | Kernel service |
-| 22 | Notification | `notifications` | ✔ | Kernel service |
+| #   | Module                | Key             | Core? | Notes                                              |
+| --- | --------------------- | --------------- | ----- | -------------------------------------------------- |
+| 1   | Dashboard             | `dashboard`     | ✔     | Role-aware; five variants (§20)                    |
+| 2   | Company Management    | `companies`     | ✔     | The tenant entity                                  |
+| 3   | Branch Management     | `branches`      | ✔     | Kernel dependency — see §5                         |
+| 4   | User Management       | `users`         | ✔     |                                                    |
+| 5   | RBAC / Authorization  | `access`        | ✔     | Kernel, not a module in the disableable sense      |
+| 6   | Customer Management   | `customers`     | ✔     |                                                    |
+| 7   | Supplier Management   | `suppliers`     |       |                                                    |
+| 8   | Product Management    | `products`      | ✔     |                                                    |
+| 9   | Order Management      | `orders`        | ✔     | Central transaction engine                         |
+| 10  | Sales Management      | `sales`         |       | Quotation → SO → DO → Invoice → Payment            |
+| 11  | Sales Team Management | `sales_teams`   |       |                                                    |
+| 12  | Marketer Management   | `marketers`     |       |                                                    |
+| 13  | Marketing / Campaign  | `campaigns`     |       |                                                    |
+| 14  | Marketing Attribution | `attribution`   |       | Domain service; surfaces as reports                |
+| 15  | Commission            | `commission`    |       |                                                    |
+| 16  | Inventory             | `inventory`     |       |                                                    |
+| 17  | Purchasing            | `purchasing`    |       |                                                    |
+| 18  | Finance               | `finance`       |       |                                                    |
+| 19  | Reporting             | `reports`       |       |                                                    |
+| 20  | Approval Workflow     | `approvals`     | ✔     | Kernel service; other modules register approvables |
+| 21  | Audit Log             | `audit`         | ✔     | Kernel service                                     |
+| 22  | Notification          | `notifications` | ✔     | Kernel service                                     |
 
 Future (not built, registry-ready): `hr`, `payroll`, `pos`, `crm`, `projects`, `assets`,
 `tickets`, `subscriptions`, `manufacturing`, `accounting_advanced`, `analytics_advanced`.
@@ -195,14 +195,14 @@ verified). A disabled module is *absent* from nav, not padlocked.
 
 Six processes define the system. Each is a transaction boundary and a test suite.
 
-| Process | Entry | Exit | Owning module |
-|---|---|---|---|
-| Lead-to-Cash | Campaign/lead captured | Payment received, commission accrued | Marketing → Orders → Finance |
-| Order-to-Fulfilment | Order approved | Delivered | Orders → Inventory |
-| Procure-to-Pay | Purchase request | Supplier paid | Purchasing → Finance |
-| Stock-to-Truth | Any movement | `SUM(movements) == on_hand` | Inventory |
-| Earn-to-Payout | Order qualifies | Commission paid + ledger posted | Commission → Finance |
-| Request-to-Approval | Approvable submitted | Approved/rejected with history | Approvals |
+| Process             | Entry                  | Exit                                 | Owning module                |
+| ------------------- | ---------------------- | ------------------------------------ | ---------------------------- |
+| Lead-to-Cash        | Campaign/lead captured | Payment received, commission accrued | Marketing → Orders → Finance |
+| Order-to-Fulfilment | Order approved         | Delivered                            | Orders → Inventory           |
+| Procure-to-Pay      | Purchase request       | Supplier paid                        | Purchasing → Finance         |
+| Stock-to-Truth      | Any movement           | `SUM(movements) == on_hand`          | Inventory                    |
+| Earn-to-Payout      | Order qualifies        | Commission paid + ledger posted      | Commission → Finance         |
+| Request-to-Approval | Approvable submitted   | Approved/rejected with history       | Approvals                    |
 
 ---
 
@@ -383,18 +383,18 @@ from shipped code.
 
 ### 13.1 What the prior systems get wrong
 
-| # | Anti-pattern | Where verified | Consequence |
-|---|---|---|---|
-| CA-1 | Rate on a **mutable** settings row, no effective dating | DZI `commission_ranks.rate`, AgentStockit `commission_settings.rate`, AgentMgmt KV store | Editing a rate silently changes what a re-run of a **closed** period produces |
-| CA-2 | Commission row **cannot name the rule that made it** — no `rank_id`, `setting_id`, rate or basis columns | all three | Explanation exists only as English prose in a `note` string; machine-useless |
-| CA-3 | Aggregate commissions carry `order_id = NULL` | DZI `type='earned'` | A month's commission is unauditable — cannot join back to its source orders |
-| CA-4 | Calculation **inline in a payment-gateway callback**, no unique index, no idempotency | AgentStockit `PaymentController:36`, AgentMgmt `PaymentController:208` | Gateways retry → **duplicate money** |
-| CA-5 | Payout sweeps approved commissions but never flips them to paid | AgentStockit `PayoutService::createBatch()` | **Run twice → pays twice** |
-| CA-6 | **No reversal path anywhere.** Refund/return/cancel after payout does nothing | all three | Overpaid commission is unrecoverable except by free-text adjustment |
-| CA-7 | Hard-`delete()` of a commission row to "correct" it | DZI `CommissionService::discardStale()` | Money rows vanish with no tombstone |
-| CA-8 | Free-transition status setter (`paid → pending` allowed) | DZI `CommissionController::setStatus()` | No state integrity |
-| CA-9 | Config surface the engine never reads (`scope=rank|product`, `conditions` jsonb) | DZI | Lies to the admin |
-| CA-10 | Payout never posts to the financial ledger | DZI `CommissionPayoutService::pay()` | Commission expense absent from P&L |
+| #     | Anti-pattern                                                                                             | Where verified                                                                           | Consequence                                                                   |
+| ----- | -------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| CA-1  | Rate on a **mutable** settings row, no effective dating                                                  | DZI `commission_ranks.rate`, AgentStockit `commission_settings.rate`, AgentMgmt KV store | Editing a rate silently changes what a re-run of a **closed** period produces |
+| CA-2  | Commission row **cannot name the rule that made it** — no `rank_id`, `setting_id`, rate or basis columns | all three                                                                                | Explanation exists only as English prose in a `note` string; machine-useless  |
+| CA-3  | Aggregate commissions carry `order_id = NULL`                                                            | DZI `type='earned'`                                                                      | A month's commission is unauditable — cannot join back to its source orders   |
+| CA-4  | Calculation **inline in a payment-gateway callback**, no unique index, no idempotency                    | AgentStockit `PaymentController:36`, AgentMgmt `PaymentController:208`                   | Gateways retry → **duplicate money**                                          |
+| CA-5  | Payout sweeps approved commissions but never flips them to paid                                          | AgentStockit `PayoutService::createBatch()`                                              | **Run twice → pays twice**                                                    |
+| CA-6  | **No reversal path anywhere.** Refund/return/cancel after payout does nothing                            | all three                                                                                | Overpaid commission is unrecoverable except by free-text adjustment           |
+| CA-7  | Hard-`delete()` of a commission row to "correct" it                                                      | DZI `CommissionService::discardStale()`                                                  | Money rows vanish with no tombstone                                           |
+| CA-8  | Free-transition status setter (`paid → pending` allowed)                                                 | DZI `CommissionController::setStatus()`                                                  | No state integrity                                                            |
+| CA-9  | Config surface the engine never reads (`scope=rank                                                       | product`, `conditions` jsonb)                                                            | DZI                                                                           | Lies to the admin |
+| CA-10 | Payout never posts to the financial ledger                                                               | DZI `CommissionPayoutService::pay()`                                                     | Commission expense absent from P&L                                            |
 
 ### 13.2 What to carry forward
 
@@ -651,13 +651,13 @@ ScopeResolver::for(User $user, string $permission): DataScope
 Applied through a `Scopeable` contract each scoped model implements, declaring how each scope
 maps to a constraint:
 
-| Scope | Constraint |
-|---|---|
-| `own` | `owner_user_id = user.id` |
-| `team` | `owner_user_id IN (user's team member ids)` — resolved through `sales_team_members`, honouring hierarchy depth |
-| `branch` | `branch_id IN (user's branch ids)` |
-| `company` | no additional constraint (the company global scope already applies) |
-| `all` | platform guard only; never grantable to a company role |
+| Scope     | Constraint                                                                                                     |
+| --------- | -------------------------------------------------------------------------------------------------------------- |
+| `own`     | `owner_user_id = user.id`                                                                                      |
+| `team`    | `owner_user_id IN (user's team member ids)` — resolved through `sales_team_members`, honouring hierarchy depth |
+| `branch`  | `branch_id IN (user's branch ids)`                                                                             |
+| `company` | no additional constraint (the company global scope already applies)                                            |
+| `all`     | platform guard only; never grantable to a company role                                                         |
 
 ### 17.3 Non-negotiable properties
 
@@ -675,13 +675,13 @@ maps to a constraint:
 
 ### 17.4 Worked examples (from the brief)
 
-| User | Role | `orders.view` | Effective query |
-|---|---|---|---|
-| Ahmad | Salesperson | ✔ scope `own` | `WHERE company_id = X AND owner_user_id = ahmad` |
-| Siti | Sales Manager | ✔ scope `team` | `WHERE company_id = X AND owner_user_id IN (team)` |
-| Rahim | Branch Manager | ✔ scope `branch` | `WHERE company_id = X AND branch_id IN (rahim's)` |
-| Lina | Finance Manager | ✔ (`invoices.view`) scope `company` | `WHERE company_id = X` |
-| Admin | System Admin | ✔ scope `all` | platform guard, audited, reason required |
+| User  | Role            | `orders.view`                       | Effective query                                    |
+| ----- | --------------- | ----------------------------------- | -------------------------------------------------- |
+| Ahmad | Salesperson     | ✔ scope `own`                       | `WHERE company_id = X AND owner_user_id = ahmad`   |
+| Siti  | Sales Manager   | ✔ scope `team`                      | `WHERE company_id = X AND owner_user_id IN (team)` |
+| Rahim | Branch Manager  | ✔ scope `branch`                    | `WHERE company_id = X AND branch_id IN (rahim's)`  |
+| Lina  | Finance Manager | ✔ (`invoices.view`) scope `company` | `WHERE company_id = X`                             |
+| Admin | System Admin    | ✔ scope `all`                       | platform guard, audited, reason required           |
 
 ---
 
@@ -1062,16 +1062,16 @@ so that prior work is not in the knowledge layer.
 
 What CoreSentinel **did** contribute:
 
-| Contribution | Effect on this plan |
-|---|---|
-| **ADR-003** (project-scoped memory) | Project was bound *before* any fact was recorded, so ERP facts did not leak into the shared Core store — the exact failure ADR-003 exists to prevent |
-| **AP-004 `STRICT_BLOCK`** — "Hardcoded Secrets & Unscoped Queries" | The data-scope architecture (§17) is enforced by the scanner, not just by intent |
-| **Anti-pattern: empty grep ≠ proof of absence** | Every "absent" claim in this document names its scan scope |
-| **Anti-pattern: unverified success claims** | Every architectural claim here is marked read-verified or inferred |
-| **Skill: snapshot money, render branding live** | §8 invoice design |
-| **Skill: separate verified from secondhand** | §0 and the agent-vs-direct-read distinction throughout |
-| `task plan` | Produced the 12-role pipeline used to structure §44 |
-| `doctor` / `verify` / `score` | Established an honest zero baseline (6 UNKNOWN, INDETERMINATE) rather than a false green |
+| Contribution                                                       | Effect on this plan                                                                                                                                  |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **ADR-003** (project-scoped memory)                                | Project was bound *before* any fact was recorded, so ERP facts did not leak into the shared Core store — the exact failure ADR-003 exists to prevent |
+| **AP-004 `STRICT_BLOCK`** — "Hardcoded Secrets & Unscoped Queries" | The data-scope architecture (§17) is enforced by the scanner, not just by intent                                                                     |
+| **Anti-pattern: empty grep ≠ proof of absence**                    | Every "absent" claim in this document names its scan scope                                                                                           |
+| **Anti-pattern: unverified success claims**                        | Every architectural claim here is marked read-verified or inferred                                                                                   |
+| **Skill: snapshot money, render branding live**                    | §8 invoice design                                                                                                                                    |
+| **Skill: separate verified from secondhand**                       | §0 and the agent-vs-direct-read distinction throughout                                                                                               |
+| `task plan`                                                        | Produced the 12-role pipeline used to structure §44                                                                                                  |
+| `doctor` / `verify` / `score`                                      | Established an honest zero baseline (6 UNKNOWN, INDETERMINATE) rather than a false green                                                             |
 
 **11 facts were written to project memory and the failures layer** during planning
 (6 project-scope, 3 failures-scope, plus stack survey). They are listed in §42.
@@ -1080,53 +1080,53 @@ What CoreSentinel **did** contribute:
 
 From the sibling projects, these are decided-and-proven and should not be relitigated:
 
-| ID | Decision | Source |
-|---|---|---|
-| E-1 | Single DB, row-scoped tenancy; no tenancy package | SMEOS ADR-001/008 |
-| E-2 | Tenant context **throws** when unresolved | SMEOS G-1a, OMS `idOrFail()` |
-| E-3 | `company_id` never in `$fillable`; stamped on create; immutable on update | SMEOS `BelongsToOrganization` |
-| E-4 | Composite `(company_id, id)` FKs so the DB rejects cross-tenant references | SMEOS + OMS |
-| E-5 | Dual auth guards, separate platform user table | SMEOS ADR-013 (security veto) |
-| E-6 | No `Gate::before` super-admin bypass | OMS `BasePolicy` |
-| E-7 | Money through a value object; never float | SMEOS `Money`, OMS `Money` cast |
-| E-8 | Status columns excluded from `$fillable`; state machine is sole writer | OMS |
-| E-9 | Append-only ledgers enforced at model **and** DB trigger | OMS |
-| E-10 | Reservation-based inventory; `available` derived | OMS ADR-07 |
-| E-11 | Zero-comment policy, enforced by test + CI | SMEOS §17, and the global `CLAUDE.md` |
-| E-12 | Reflection-driven isolation suite (discovers models, not a hand-maintained list) | SMEOS `TenantIsolationTest` |
-| E-13 | Server-built navigation; hide not lock | SMEOS `NavigationBuilder` |
-| E-14 | Seed only shipped modules | SMEOS C-05 |
+| ID   | Decision                                                                         | Source                                |
+| ---- | -------------------------------------------------------------------------------- | ------------------------------------- |
+| E-1  | Single DB, row-scoped tenancy; no tenancy package                                | SMEOS ADR-001/008                     |
+| E-2  | Tenant context **throws** when unresolved                                        | SMEOS G-1a, OMS `idOrFail()`          |
+| E-3  | `company_id` never in `$fillable`; stamped on create; immutable on update        | SMEOS `BelongsToOrganization`         |
+| E-4  | Composite `(company_id, id)` FKs so the DB rejects cross-tenant references       | SMEOS + OMS                           |
+| E-5  | Dual auth guards, separate platform user table                                   | SMEOS ADR-013 (security veto)         |
+| E-6  | No `Gate::before` super-admin bypass                                             | OMS `BasePolicy`                      |
+| E-7  | Money through a value object; never float                                        | SMEOS `Money`, OMS `Money` cast       |
+| E-8  | Status columns excluded from `$fillable`; state machine is sole writer           | OMS                                   |
+| E-9  | Append-only ledgers enforced at model **and** DB trigger                         | OMS                                   |
+| E-10 | Reservation-based inventory; `available` derived                                 | OMS ADR-07                            |
+| E-11 | Zero-comment policy, enforced by test + CI                                       | SMEOS §17, and the global `CLAUDE.md` |
+| E-12 | Reflection-driven isolation suite (discovers models, not a hand-maintained list) | SMEOS `TenantIsolationTest`           |
+| E-13 | Server-built navigation; hide not lock                                           | SMEOS `NavigationBuilder`             |
+| E-14 | Seed only shipped modules                                                        | SMEOS C-05                            |
 
 ### 34.3 New decisions proposed (require approval)
 
-| ID | Decision | Why |
-|---|---|---|
-| N-1 | **`Permission × DataScope`** authorization, scope on the role↔permission pivot | §17; no prior system has it and retrofit is the most expensive available mistake |
-| N-2 | **Branch is kernel, not a deferred module** | It participates in scope resolution, therefore in every query |
-| N-3 | **Attribution is its own polymorphic domain** | §14; five systems prove the cost of columns-on-order |
-| N-4 | **Commission rules immutable + effective-dated; every commission stamps its rule version and basis** | Fixes CA-1, CA-2, CA-3 |
-| N-5 | **Commission reversal as a contra entry**, never delete | Fixes CA-6, CA-7 |
-| N-6 | **Commission calculated in a queued job with a DB unique index**, never in a gateway callback | Fixes CA-4, CA-5 |
-| N-7 | **Three-axis order status** | §7 |
-| N-8 | **Payout posts to Finance in the same transaction** | Fixes CA-10 |
-| N-9 | **Plural permission group naming** (`products.view`) | Matches 49 shipped SMEOS keys; brief delegated this |
-| N-10 | **Share permissions to the frontend for UX**, backend remains the boundary | Fixes SMEOS's always-render-then-403 UX |
-| N-11 | **Component library built in P0**, not deferred | SMEOS deferred it and pays in duplication |
-| N-12 | **Partial fulfilment per line** | Absent in OMS; an ERP needs it |
+| ID   | Decision                                                                                             | Why                                                                              |
+| ---- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| N-1  | **`Permission × DataScope`** authorization, scope on the role↔permission pivot                       | §17; no prior system has it and retrofit is the most expensive available mistake |
+| N-2  | **Branch is kernel, not a deferred module**                                                          | It participates in scope resolution, therefore in every query                    |
+| N-3  | **Attribution is its own polymorphic domain**                                                        | §14; five systems prove the cost of columns-on-order                             |
+| N-4  | **Commission rules immutable + effective-dated; every commission stamps its rule version and basis** | Fixes CA-1, CA-2, CA-3                                                           |
+| N-5  | **Commission reversal as a contra entry**, never delete                                              | Fixes CA-6, CA-7                                                                 |
+| N-6  | **Commission calculated in a queued job with a DB unique index**, never in a gateway callback        | Fixes CA-4, CA-5                                                                 |
+| N-7  | **Three-axis order status**                                                                          | §7                                                                               |
+| N-8  | **Payout posts to Finance in the same transaction**                                                  | Fixes CA-10                                                                      |
+| N-9  | **Plural permission group naming** (`products.view`)                                                 | Matches 49 shipped SMEOS keys; brief delegated this                              |
+| N-10 | **Share permissions to the frontend for UX**, backend remains the boundary                           | Fixes SMEOS's always-render-then-403 UX                                          |
+| N-11 | **Component library built in P0**, not deferred                                                      | SMEOS deferred it and pays in duplication                                        |
+| N-12 | **Partial fulfilment per line**                                                                      | Absent in OMS; an ERP needs it                                                   |
 
 ### 34.4 Conflicts identified
 
-| ID | Conflict | Resolution proposed |
-|---|---|---|
-| **C-1** | **Database engine.** SMEOS = PostgreSQL 16 (hard requirement, `phpunit.xml` pins it). OMS = MariaDB 11.8 LTS, with a recorded "never MySQL" position because its row-locking guarantees are engine-specific | **Decide once, at approval.** Recommend PostgreSQL — see §36 Option 1. Whichever wins, the other codebase's SQL-level patterns need translation, not copy-paste |
-| **C-2** | **Money representation.** SMEOS = `NUMERIC(15,4)` + bcmath `Money`. OMS = integer cents + a cast that rejects floats | **Recommend `NUMERIC(15,4)` + Money VO.** Integer cents is chosen in OMS to avoid float drift, but PostgreSQL `NUMERIC` is already exact, and an ERP needs sub-cent precision for unit costs and percentage commission |
-| **C-3** | **RBAC mechanism.** SMEOS = spatie teams mode (DB-driven, customer-editable). OMS = hand-rolled enum matrix (auditable in one file, but roles are code) | **Recommend spatie teams mode** — an SME must create its own roles without a deploy |
-| **C-4** | **Primary keys.** SMEOS = ULID everywhere (ADR-002). OMS = auto-increment | **Recommend ULID.** Bigint leaks tenant volume and is enumerable — a real IDOR-adjacent risk in multi-tenant |
-| **C-5** | **Tenant entity naming.** SMEOS = `Organization`. OMS = `Tenant`. Brief = `Company` | **Use `Company`**, matching the brief and SME vocabulary. Note this means SMEOS code is renamed on the way in, not copied |
-| **C-6** | **DTO layer.** SMEOS has none (empty `app/Data/`). OMS uses readonly DTOs | **Adopt OMS's** — SMEOS's absence causes the duplication it complains about |
-| **C-7** | **Scope of "ERP" itself.** SMEOS positions explicitly as *"not an ERP"*; OMS declares full ERP/accounting *"integration target, not build target"* | Both are narrower products. **This project is a genuinely larger build than either**, and the phase plan (§44) must not be estimated from their velocity |
-| **C-8** | Brief §16 proposes singular permission names; house convention is plural | N-9 |
-| **C-9** | `02-team-protocol.md` Standing Rule #7 mandates Windows/PowerShell/`python`; this machine is macOS/zsh/`python3` | Needs a `gate waive` or a CSE proposal to make Rule 7 platform-conditional. Flagged, not silently ignored |
+| ID      | Conflict                                                                                                                                                                                                    | Resolution proposed                                                                                                                                                                                                    |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **C-1** | **Database engine.** SMEOS = PostgreSQL 16 (hard requirement, `phpunit.xml` pins it). OMS = MariaDB 11.8 LTS, with a recorded "never MySQL" position because its row-locking guarantees are engine-specific | **Decide once, at approval.** Recommend PostgreSQL — see §36 Option 1. Whichever wins, the other codebase's SQL-level patterns need translation, not copy-paste                                                        |
+| **C-2** | **Money representation.** SMEOS = `NUMERIC(15,4)` + bcmath `Money`. OMS = integer cents + a cast that rejects floats                                                                                        | **Recommend `NUMERIC(15,4)` + Money VO.** Integer cents is chosen in OMS to avoid float drift, but PostgreSQL `NUMERIC` is already exact, and an ERP needs sub-cent precision for unit costs and percentage commission |
+| **C-3** | **RBAC mechanism.** SMEOS = spatie teams mode (DB-driven, customer-editable). OMS = hand-rolled enum matrix (auditable in one file, but roles are code)                                                     | **Recommend spatie teams mode** — an SME must create its own roles without a deploy                                                                                                                                    |
+| **C-4** | **Primary keys.** SMEOS = ULID everywhere (ADR-002). OMS = auto-increment                                                                                                                                   | **Recommend ULID.** Bigint leaks tenant volume and is enumerable — a real IDOR-adjacent risk in multi-tenant                                                                                                           |
+| **C-5** | **Tenant entity naming.** SMEOS = `Organization`. OMS = `Tenant`. Brief = `Company`                                                                                                                         | **Use `Company`**, matching the brief and SME vocabulary. Note this means SMEOS code is renamed on the way in, not copied                                                                                              |
+| **C-6** | **DTO layer.** SMEOS has none (empty `app/Data/`). OMS uses readonly DTOs                                                                                                                                   | **Adopt OMS's** — SMEOS's absence causes the duplication it complains about                                                                                                                                            |
+| **C-7** | **Scope of "ERP" itself.** SMEOS positions explicitly as *"not an ERP"*; OMS declares full ERP/accounting *"integration target, not build target"*                                                          | Both are narrower products. **This project is a genuinely larger build than either**, and the phase plan (§44) must not be estimated from their velocity                                                               |
+| **C-8** | Brief §16 proposes singular permission names; house convention is plural                                                                                                                                    | N-9                                                                                                                                                                                                                    |
+| **C-9** | `02-team-protocol.md` Standing Rule #7 mandates Windows/PowerShell/`python`; this machine is macOS/zsh/`python3`                                                                                            | Needs a `gate waive` or a CSE proposal to make Rule 7 platform-conditional. Flagged, not silently ignored                                                                                                              |
 
 ### 34.5 Unresolved questions requiring your decision
 
@@ -1152,11 +1152,11 @@ branches. The following are **explicitly out of scope**: `packages`, `package_mo
 
 What is still built, and why:
 
-| Kept | Reason |
-|---|---|
-| `company_id` + global scope on every business table | Cheap now, expensive to retrofit. One company row exists; the mechanism costs almost nothing |
-| Module registry + per-company enable/disable | The brief requires modules to be enable-able. Registry stays; **`min_plan` gating is dropped** |
-| Branch, Department, User hierarchy | Kernel — it feeds data scope |
+| Kept                                                | Reason                                                                                         |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| `company_id` + global scope on every business table | Cheap now, expensive to retrofit. One company row exists; the mechanism costs almost nothing   |
+| Module registry + per-company enable/disable        | The brief requires modules to be enable-able. Registry stays; **`min_plan` gating is dropped** |
+| Branch, Department, User hierarchy                  | Kernel — it feeds data scope                                                                   |
 
 **Dropped from §23:** `packages`, `package_modules`, `features`, `subscriptions` — 4 tables.
 **Dropped from §4:** `min_plan` on the module registry.
@@ -1185,15 +1185,15 @@ of an existing kernel you inherit.**
 
 ### Option 1 — SMEOS lineage *(recommended)*
 
-| | |
-|---|---|
-| Backend | **Laravel 12 LTS**, PHP 8.3 |
-| Database | **PostgreSQL 16** |
-| Keys / Money | ULID · `NUMERIC(15,4)` + bcmath `Money` VO |
-| Frontend | Inertia 3 + React 19 + TypeScript + Bootstrap 5 + Vite |
-| RBAC | `spatie/laravel-permission` teams mode + custom scope layer |
-| Queue | Redis + Horizon |
-| Testing | Pest 3 + Larastan + Pint |
+|              |                                                             |
+| ------------ | ----------------------------------------------------------- |
+| Backend      | **Laravel 12 LTS**, PHP 8.3                                 |
+| Database     | **PostgreSQL 16**                                           |
+| Keys / Money | ULID · `NUMERIC(15,4)` + bcmath `Money` VO                  |
+| Frontend     | Inertia 3 + React 19 + TypeScript + Bootstrap 5 + Vite      |
+| RBAC         | `spatie/laravel-permission` teams mode + custom scope layer |
+| Queue        | Redis + Horizon                                             |
+| Testing      | Pest 3 + Larastan + Pint                                    |
 
 **Inherits:** the tenancy kernel (`TenantContext`, `BelongsToOrganization`,
 `OrganizationScope`, `ResolveOrganization`), the composite-FK schema discipline, the `Money`
@@ -1214,15 +1214,15 @@ ageing buckets, and exact `NUMERIC`.
 
 ### Option 2 — OMS lineage
 
-| | |
-|---|---|
-| Backend | **Laravel 13.8**, PHP 8.3/8.4 |
-| Database | **MariaDB 11.8 LTS** |
-| Keys / Money | auto-increment · integer cents + rejecting cast |
-| Frontend | Inertia 3 + React 19 + TypeScript 7 + Bootstrap 5 + Vite 8 |
-| RBAC | Hand-rolled `Ability` enum matrix *(would need replacing — see C-3)* |
-| Queue | Redis + Horizon, three lanes |
-| Testing | Pest 4 |
+|              |                                                                      |
+| ------------ | -------------------------------------------------------------------- |
+| Backend      | **Laravel 13.8**, PHP 8.3/8.4                                        |
+| Database     | **MariaDB 11.8 LTS**                                                 |
+| Keys / Money | auto-increment · integer cents + rejecting cast                      |
+| Frontend     | Inertia 3 + React 19 + TypeScript 7 + Bootstrap 5 + Vite 8           |
+| RBAC         | Hand-rolled `Ability` enum matrix *(would need replacing — see C-3)* |
+| Queue        | Redis + Horizon, three lanes                                         |
+| Testing      | Pest 4                                                               |
 
 **Inherits:** the three-axis order engine, reservation inventory, append-only ledgers with DB
 triggers, mutability policy, intake adapters — i.e. **the transaction core rather than the
@@ -1238,12 +1238,12 @@ and auto-increment keys leak volume across tenants.
 
 ### Option 3 — Filament-accelerated back office
 
-| | |
-|---|---|
-| Backend | Laravel 12, PHP 8.3, **Filament 4** for admin/back-office |
-| Database | PostgreSQL 16 |
+|          |                                                                                             |
+| -------- | ------------------------------------------------------------------------------------------- |
+| Backend  | Laravel 12, PHP 8.3, **Filament 4** for admin/back-office                                   |
+| Database | PostgreSQL 16                                                                               |
 | Frontend | Filament for the 22 CRUD modules; **Inertia + React only** for dashboards, order board, POS |
-| RBAC | spatie + `filament-shield` |
+| RBAC     | spatie + `filament-shield`                                                                  |
 
 **Why consider it:** you have ~6 Filament projects. 22 modules of master-data CRUD is where
 most ERP build time actually goes, and Filament removes most of it.
@@ -1278,20 +1278,20 @@ straight through that centrepiece.
 
 Mapped to `40-security-protocol.md`, which is loaded and governs this project.
 
-| Area | Position |
-|---|---|
-| Secrets | `.env` only, `.env.example` with placeholders, CI secret scan. AP-004 is `STRICT_BLOCK` |
-| SQL injection | Eloquent/parameterised only; allowlists for any dynamic column |
-| XSS | React auto-escapes; no `dangerouslySetInnerHTML` with user data; CSP headers |
-| CSRF | Tokens on all state-changing forms; webhook routes exempt **with a documented reason** |
-| Mass assignment | `company_id`, `branch_id`, status columns, money totals, `owner_user_id` all excluded from `$fillable`; CI grep enforces |
-| **Tenant isolation** | Global scope + composite FKs + reflection-driven suite (§39) |
-| **Data scope** | §17, fail-closed, one greppable escape hatch |
-| File upload | MIME + extension validation, size cap, rename, **private disk** `company/{id}/`, cross-company download → 404 |
-| API/webhook | HMAC signature, replay window, idempotency key, rate limit |
-| Rate limiting | Login, exports, report generation, webhook ingress |
-| PII | Not written into audit payloads; erasure path designed before launch (PDPA) |
-| Production | Debug off, HTTPS enforced, HSTS/X-Frame-Options/X-Content-Type-Options, tested restores |
+| Area                 | Position                                                                                                                 |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Secrets              | `.env` only, `.env.example` with placeholders, CI secret scan. AP-004 is `STRICT_BLOCK`                                  |
+| SQL injection        | Eloquent/parameterised only; allowlists for any dynamic column                                                           |
+| XSS                  | React auto-escapes; no `dangerouslySetInnerHTML` with user data; CSP headers                                             |
+| CSRF                 | Tokens on all state-changing forms; webhook routes exempt **with a documented reason**                                   |
+| Mass assignment      | `company_id`, `branch_id`, status columns, money totals, `owner_user_id` all excluded from `$fillable`; CI grep enforces |
+| **Tenant isolation** | Global scope + composite FKs + reflection-driven suite (§39)                                                             |
+| **Data scope**       | §17, fail-closed, one greppable escape hatch                                                                             |
+| File upload          | MIME + extension validation, size cap, rename, **private disk** `company/{id}/`, cross-company download → 404            |
+| API/webhook          | HMAC signature, replay window, idempotency key, rate limit                                                               |
+| Rate limiting        | Login, exports, report generation, webhook ingress                                                                       |
+| PII                  | Not written into audit payloads; erasure path designed before launch (PDPA)                                              |
+| Production           | Debug off, HTTPS enforced, HSTS/X-Frame-Options/X-Content-Type-Options, tested restores                                  |
 
 **Security gates are satisfiable only by a passing automated test, never by self-assessment**
 — adopted verbatim from SMEOS's §15, which is the right standard.
@@ -1302,16 +1302,16 @@ Mapped to `40-security-protocol.md`, which is loaded and governs this project.
 
 Identified now, optimised only when measured (`45-performance-protocol.md`).
 
-| Risk | Mitigation |
-|---|---|
+| Risk                                   | Mitigation                                                                                          |
+| -------------------------------------- | --------------------------------------------------------------------------------------------------- |
 | Scoped queries add joins to every list | `(company_id, branch_id, owner_user_id)` composite indexes; `company_id` **leading** on every index |
-| Order board at 50k+ orders/company | Keyset pagination, TanStack Virtual, no `COUNT(*)` on load |
-| Commission runs over a period | Queued, chunked, per-recipient fault isolation |
-| Dashboard aggregates | Precomputed reporting tables + live-query oracle in tests |
-| Stock movement ledger growth | Denormalised `balance_after`; partitioning candidate at scale |
-| Audit log growth | Retention policy + archival from day one |
-| N+1 | **Query-count assertions in the Definition of Done** (SMEOS DoD item — cheap and effective) |
-| Attribution reporting joins | Precomputed campaign-performance rollups |
+| Order board at 50k+ orders/company     | Keyset pagination, TanStack Virtual, no `COUNT(*)` on load                                          |
+| Commission runs over a period          | Queued, chunked, per-recipient fault isolation                                                      |
+| Dashboard aggregates                   | Precomputed reporting tables + live-query oracle in tests                                           |
+| Stock movement ledger growth           | Denormalised `balance_after`; partitioning candidate at scale                                       |
+| Audit log growth                       | Retention policy + archival from day one                                                            |
+| N+1                                    | **Query-count assertions in the Definition of Done** (SMEOS DoD item — cheap and effective)         |
+| Attribution reporting joins            | Precomputed campaign-performance rollups                                                            |
 
 `Model::shouldBeStrict()` outside production makes lazy loading fail loudly in development.
 
@@ -1381,23 +1381,23 @@ will migrate over the dev database).
 
 ## 41. Risks
 
-| ID | Risk | Sev | Mitigation |
-|---|---|---|---|
-| R-01 | **Data-scope bug leaks records between users** | Critical | Reflection-driven scope suite; fail-closed resolver; single escape hatch; CI count guard |
-| R-02 | **Cross-company leak** | Critical | Global scope + composite FKs + isolation suite |
-| R-03 | **Commission pays twice** (observed in two prior systems) | Critical | Queued job + DB unique index + payout reservation + idempotency test |
-| R-04 | **Commission cannot be explained to a marketer who disputes it** | High | Rule versioning + basis/inputs persisted + `commission_sources` |
-| R-05 | Scope creep — 22 modules is a multi-year surface | High | Phase gates; §3 profiles decide priority; nothing past P4 until one real SME uses it |
-| R-06 | Attribution ambiguity (two marketers claim one lead) | High | Explicit first/last touch + tie-break rules **decided before build**, not discovered in production |
-| R-07 | Inventory oversell under concurrency | High | Blocking row locks, consistent lock ordering (fix OMS H-02/H-03), multi-process tests |
-| R-08 | Approval engine over-generalised into unusable | Medium | Build for the 11 named approvables only |
-| R-09 | Reporting drift between precomputed and live | Medium | Live-query oracle in tests |
-| R-10 | Solo support burden | High | Named by OMS as its highest real-world risk. Ten SME tenants is a part-time support job |
-| R-11 | PDPA vs append-only audit | Medium | Field-name-only audit payloads; erasure path designed now |
-| R-12 | Estimating from SMEOS/OMS velocity | Medium | Both are narrower products (C-7) |
-| R-13 | Two frontend paradigms (Option 3 only) | Medium | **Retired** — Option 1 selected (ADR-006) |
+| ID       | Risk                                                                                                                                                                 | Sev      | Mitigation                                                                                                                                                                                       |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R-01     | **Data-scope bug leaks records between users**                                                                                                                       | Critical | Reflection-driven scope suite; fail-closed resolver; single escape hatch; CI count guard                                                                                                         |
+| R-02     | **Cross-company leak**                                                                                                                                               | Critical | Global scope + composite FKs + isolation suite                                                                                                                                                   |
+| R-03     | **Commission pays twice** (observed in two prior systems)                                                                                                            | Critical | Queued job + DB unique index + payout reservation + idempotency test                                                                                                                             |
+| R-04     | **Commission cannot be explained to a marketer who disputes it**                                                                                                     | High     | Rule versioning + basis/inputs persisted + `commission_sources`                                                                                                                                  |
+| R-05     | Scope creep — 22 modules is a multi-year surface                                                                                                                     | High     | Phase gates; §3 profiles decide priority; nothing past P4 until one real SME uses it                                                                                                             |
+| R-06     | Attribution ambiguity (two marketers claim one lead)                                                                                                                 | High     | Explicit first/last touch + tie-break rules **decided before build**, not discovered in production                                                                                               |
+| R-07     | Inventory oversell under concurrency                                                                                                                                 | High     | Blocking row locks, consistent lock ordering (fix OMS H-02/H-03), multi-process tests                                                                                                            |
+| R-08     | Approval engine over-generalised into unusable                                                                                                                       | Medium   | Build for the 11 named approvables only                                                                                                                                                          |
+| R-09     | Reporting drift between precomputed and live                                                                                                                         | Medium   | Live-query oracle in tests                                                                                                                                                                       |
+| R-10     | Solo support burden                                                                                                                                                  | High     | Named by OMS as its highest real-world risk. Ten SME tenants is a part-time support job                                                                                                          |
+| R-11     | PDPA vs append-only audit                                                                                                                                            | Medium   | Field-name-only audit payloads; erasure path designed now                                                                                                                                        |
+| R-12     | Estimating from SMEOS/OMS velocity                                                                                                                                   | Medium   | Both are narrower products (C-7)                                                                                                                                                                 |
+| R-13     | Two frontend paradigms (Option 3 only)                                                                                                                               | Medium   | **Retired** — Option 1 selected (ADR-006)                                                                                                                                                        |
 | **R-14** | **Wrong landed cost produces wrong commission.** ADR-009 makes commission a function of margin, so a costing error is a payment error, and marketers will dispute it | **High** | Landed cost correct and tested in P4 before Commission ships in P6; cost snapshotted onto the order line at sale; a costing-change report showing which commissions a cost correction would move |
-| **R-15** | **Provisional commission never gets finalised.** Accruals sit provisional forever because nobody closes the period, and marketers are paid on estimates | **High** | A provisional commission can reach `approved` but **never `payable`**; a period-close job is scheduled, not manual; an ageing alert fires on provisional accruals older than one closed period |
+| **R-15** | **Provisional commission never gets finalised.** Accruals sit provisional forever because nobody closes the period, and marketers are paid on estimates              | **High** | A provisional commission can reach `approved` but **never `payable`**; a period-close job is scheduled, not manual; an ageing alert fires on provisional accruals older than one closed period   |
 
 ---
 
@@ -1425,14 +1425,14 @@ Written to the shared failures layer (transferable across projects):
 **Written after Fakrul resolved §43 (2026-08-15)** — six ADRs now in the project ledger at
 `.coresentinel/memory/decisions.json`:
 
-| ADR | Decision |
-|---|---|
-| ADR-005 | Client project, single company multi-branch, no SaaS shell |
+| ADR     | Decision                                                            |
+| ------- | ------------------------------------------------------------------- |
+| ADR-005 | Client project, single company multi-branch, no SaaS shell          |
 | ADR-006 | Stack: Laravel 12 + PostgreSQL 16 + Inertia/React 19/TS/Bootstrap 5 |
-| ADR-007 | Authorization is `Permission × DataScope` from commit one |
-| ADR-008 | Attribution is its own polymorphic domain; first-touch wins |
-| ADR-009 | Commission pays a percentage of full gross margin |
-| ADR-010 | Commission rules immutable and effective-dated |
+| ADR-007 | Authorization is `Permission × DataScope` from commit one           |
+| ADR-008 | Attribution is its own polymorphic domain; first-touch wins         |
+| ADR-009 | Commission pays a percentage of full gross margin                   |
+| ADR-010 | Commission rules immutable and effective-dated                      |
 
 The remaining proposals (N-7 three-axis order status, N-11 component library in P0, N-12
 partial fulfilment, and the rest) are **still proposals** and are not in the ledger — they were
@@ -1448,32 +1448,32 @@ EVO-004 filed for CoreSentinel Standing Rule 7, `PENDING_REVIEW`.
 
 All 13 resolved by Fakrul, plus 2 new questions raised during resolution and also resolved.
 
-| # | Question | **Decision** | Recorded |
-|---|---|---|---|
-| **Q-1** | Tech stack | **Option 1 — SMEOS lineage** | ADR-006 |
-| **Q-2** | Database engine (C-1) | **PostgreSQL 16** | ADR-006 |
-| **Q-3** | Money representation (C-2) | **`NUMERIC(15,4)` + bcmath Money VO** | ADR-006 |
-| **Q-4** | Primary target profile | **P-A social-commerce trader** | §3 |
-| **Q-5** | Work mode | **Client project** — handoff protocol applies | ADR-005 |
-| **Q-6** | Attribution tie-break | **First touch wins** | ADR-008, §14.4 |
-| **Q-7** | Default commission strategy | **Percentage of gross margin** | ADR-009, §13.4 |
-| **Q-8** | Approval delegation in v1 | **Defer to v1.1** | §19 |
-| **Q-9** | Multi-currency in v1 | **MYR only**; `currency` column retained | §24 |
-| **Q-10** | SaaS billing in v1 | **Not built** — superseded by Q-14 | ADR-005, §35 |
-| **Q-11** | `git init` | **Done** — repo initialised, planning committed `e30910b` | — |
-| **Q-12** | CoreSentinel Rule 7 (C-9) | **CSE proposal filed → EVO-004, `PENDING_REVIEW`** | EVO-004 |
-| **Q-13** | EVO-003 | **Approved.** Apply refused — target is a governance doc outside the safe-change set. **Proposal is stale**: `04-memory-ecosystem-protocol.md` already documents all six lifecycle operations. Nothing to apply | — |
-| **Q-14** *(new)* | Deployment shape, given client work | **One client, multi-branch. No SaaS shell** | ADR-005, §35 |
-| **Q-15** *(new)* | What "gross margin" deducts | **Full: − cost − shipping − fees − ad spend** | ADR-009, §13.4 |
+| #                | Question                            | **Decision**                                                                                                                                                                                                    | Recorded       |
+| ---------------- | ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| **Q-1**          | Tech stack                          | **Option 1 — SMEOS lineage**                                                                                                                                                                                    | ADR-006        |
+| **Q-2**          | Database engine (C-1)               | **PostgreSQL 16**                                                                                                                                                                                               | ADR-006        |
+| **Q-3**          | Money representation (C-2)          | **`NUMERIC(15,4)` + bcmath Money VO**                                                                                                                                                                           | ADR-006        |
+| **Q-4**          | Primary target profile              | **P-A social-commerce trader**                                                                                                                                                                                  | §3             |
+| **Q-5**          | Work mode                           | **Client project** — handoff protocol applies                                                                                                                                                                   | ADR-005        |
+| **Q-6**          | Attribution tie-break               | **First touch wins**                                                                                                                                                                                            | ADR-008, §14.4 |
+| **Q-7**          | Default commission strategy         | **Percentage of gross margin**                                                                                                                                                                                  | ADR-009, §13.4 |
+| **Q-8**          | Approval delegation in v1           | **Defer to v1.1**                                                                                                                                                                                               | §19            |
+| **Q-9**          | Multi-currency in v1                | **MYR only**; `currency` column retained                                                                                                                                                                        | §24            |
+| **Q-10**         | SaaS billing in v1                  | **Not built** — superseded by Q-14                                                                                                                                                                              | ADR-005, §35   |
+| **Q-11**         | `git init`                          | **Done** — repo initialised, planning committed `e30910b`                                                                                                                                                       | —              |
+| **Q-12**         | CoreSentinel Rule 7 (C-9)           | **CSE proposal filed → EVO-004, `PENDING_REVIEW`**                                                                                                                                                              | EVO-004        |
+| **Q-13**         | EVO-003                             | **Approved.** Apply refused — target is a governance doc outside the safe-change set. **Proposal is stale**: `04-memory-ecosystem-protocol.md` already documents all six lifecycle operations. Nothing to apply | —              |
+| **Q-14** *(new)* | Deployment shape, given client work | **One client, multi-branch. No SaaS shell**                                                                                                                                                                     | ADR-005, §35   |
+| **Q-15** *(new)* | What "gross margin" deducts         | **Full: − cost − shipping − fees − ad spend**                                                                                                                                                                   | ADR-009, §13.4 |
 
 ### Still genuinely open (raised by the answers, not blocking P0–P2)
 
-| # | Question | Needed by |
-|---|---|---|
-| **Q-16** | Ad-spend allocation rule default — `pro_rata_by_order_value`, `equal_per_order`, `pro_rata_by_margin` or `excluded` (§13.4b) | Before P6 |
+| #        | Question                                                                                                                                | Needed by |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------- | --------- |
+| **Q-16** | Ad-spend allocation rule default — `pro_rata_by_order_value`, `equal_per_order`, `pro_rata_by_margin` or `excluded` (§13.4b)            | Before P6 |
 | **Q-17** | Who closes a commission period, and on what schedule? R-15 depends on this being a scheduled job with a named owner, not a manual habit | Before P6 |
-| **Q-18** | Does the client have real landed-cost data today, or is `unit_cost` currently a guess? ADR-009 makes this a payroll input (R-14) | Before P4 |
-| **Q-19** | Payment gateway(s) and courier(s) in scope — affects fee capture (§13.4a) and shipping cost timing | Before P3 |
+| **Q-18** | Does the client have real landed-cost data today, or is `unit_cost` currently a guess? ADR-009 makes this a payroll input (R-14)        | Before P4 |
+| **Q-19** | Payment gateway(s) and courier(s) in scope — affects fee capture (§13.4a) and shipping cost timing                                      | Before P3 |
 
 ---
 
@@ -1482,19 +1482,19 @@ All 13 resolved by Fakrul, plus 2 new questions raised during resolution and als
 Derived from the dependency graph (§5), not from the brief's example. Each phase has an
 **exit gate satisfiable only by a passing test**.
 
-| Phase | Name | Contents | Exit gate |
-|---|---|---|---|
-| **P0 ✔** | Foundation | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | **GATE CLOSED 2026-08-15** — see Appendix C |
-| **P1 ✔** | Access | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test |
-| **P2 ✔** | Master data | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering | Price resolution returns a decomposition; numbering unique under concurrency |
-| **P3 ✔** | Orders | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason |
-| **P4 ✔** | Inventory & Purchasing | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks |
-| **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain** | All 12 attribution questions answered by a named tested query |
-| **P6 ✔** | Commission | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
-| **P7 ✔** | Finance | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture |
-| **P8 ✔** | Reporting & Dashboards | Five role dashboards, precomputed rollups, exports | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle |
-| **P9 ~** | Hardening & Launch | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy | External security review clean; restore rehearsed and documented |
-| **P10** | Optional modules | HR, Payroll, POS, CRM, Projects, Assets, Tickets, Subscriptions | Per module |
+| Phase    | Name                    | Contents                                                                                                                                                                                                                               | Exit gate                                                                                                                                                                                     |
+| -------- | ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **P0 ✔** | Foundation              | Laravel 12 + PostgreSQL 16 + Inertia/React scaffold, CI with forbidden-pattern guards, `Money` VO, **company tenancy kernel**, single `web` guard with no privilege boolean, **component library**, module registry *(no plan gating)* | **GATE CLOSED 2026-08-15** — see Appendix C                                                                                                                                                   |
+| **P1 ✔** | Access                  | RBAC (spatie teams) + **DataScope layer** + `ScopeResolver` + `Scopeable` + policies, Company/Branch/Department/User admin, Audit log                                                                                                  | **GATE CLOSED 2026-08-15** — see Appendix D. A salesperson cannot reach another's record via route, export, report or API — proven by test                                                    |
+| **P2 ✔** | Master data             | Customer, Supplier, Product (variants, pricing, tax, bundles), `PriceResolver`, document numbering                                                                                                                                     | Price resolution returns a decomposition; numbering unique under concurrency                                                                                                                  |
+| **P3 ✔** | Orders                  | Order + items + three-axis state machine + mutability policy + `order_events`, Quotation→SO→DO→Invoice→Payment                                                                                                                         | No status logic outside the state machine (grep-verified); illegal transitions rejected with a readable reason                                                                                |
+| **P4 ✔** | Inventory & Purchasing  | Warehouses, stock, reservations, movements, transfers, counts; PR→PO→GRN→Bill→Payment; Approval engine                                                                                                                                 | `SUM(movements) == on_hand`; last-unit reservation correct under 8 concurrent processes; three-way match blocks                                                                               |
+| **P5 ✔** | Sales force & Marketing | Sales teams, territories, targets, activities; marketers, channels, campaigns, leads, referral/promo codes; **Attribution domain**                                                                                                     | All 12 attribution questions answered by a named tested query                                                                                                                                 |
+| **P6 ✔** | Commission              | Plans, immutable versioned rules, strategies, queued calculation, **provisional→final restatement**, **ad-spend allocation**, reversal, payout, Finance posting                                                                        | Re-run is idempotent (unique index proven); reversal produces a contra entry; every commission renders its full deduction breakdown from data; **no provisional accrual can reach `payable`** |
+| **P7 ✔** | Finance                 | Accounts, journal, cash flow, AR/AP, expenses, payments, refunds, credit notes                                                                                                                                                         | Invoice→payment→outstanding reconciles to the cent; ageing buckets match fixture                                                                                                              |
+| **P8 ✔** | Reporting & Dashboards  | Five role dashboards, precomputed rollups, exports                                                                                                                                                                                     | Every dashboard figure scope-filtered — proven by test; precomputed matches live-query oracle                                                                                                 |
+| **P9 ~** | Hardening & Launch      | Security review, performance pass, PDPA erasure, backup + **rehearsed restore**, deploy                                                                                                                                                | External security review clean; restore rehearsed and documented                                                                                                                              |
+| **P10**  | Optional modules        | HR, Payroll, POS, CRM, Projects, Assets, Tickets, Subscriptions                                                                                                                                                                        | Per module                                                                                                                                                                                    |
 
 **Hard scope gate:** no work past P4 until one real SME is using P0–P4. Adopted from SMEOS's
 Sage veto, which is the most valuable governance rule in that document.
@@ -1560,38 +1560,38 @@ full. Available on request.
 
 ### Verified toolchain
 
-| Component | Version | Note |
-|---|---|---|
-| PHP | 8.4.10 | |
-| Laravel | 12.66.0 | |
+| Component  | Version                | Note                                                                                                         |
+| ---------- | ---------------------- | ------------------------------------------------------------------------------------------------------------ |
+| PHP        | 8.4.10                 |                                                                                                              |
+| Laravel    | 12.66.0                |                                                                                                              |
 | PostgreSQL | **16.14 on port 5433** | `psql --version` reports 14.18 — that is the **client** binary. Server version taken from `select version()` |
-| Redis | 8.4.0 | |
-| Node / npm | 20.19.4 / 10.8.2 | Vite 7 requires `^20.19.0`; this is the minimum |
+| Redis      | 8.4.0                  |                                                                                                              |
+| Node / npm | 20.19.4 / 10.8.2       | Vite 7 requires `^20.19.0`; this is the minimum                                                              |
 
 `@vitejs/plugin-react` is pinned to `^5.2.0` because v6 requires Vite 8 while Laravel 12 pins
 Vite 7. The pairing was resolved by pinning, not by `--legacy-peer-deps`.
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **143 passed, 213 assertions** (Unit 62 · Architecture 4 · Isolation 69 · Feature 8) |
-| PHPStan | **level 6, no errors** |
-| Pint | **pass** |
-| `tsc --noEmit` | **pass** (strict + `exactOptionalPropertyTypes`) |
-| `npm run build` | **pass**, 621 modules |
-| Schema | 22 tables, `company_id NOT NULL` on all 9 scoped tables, 4 composite `(company_id, id)` FKs, CHECK constraints on both enums — verified from `information_schema`, not from migration output |
+| Gate            | Result                                                                                                                                                                                       |
+| --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Pest            | **143 passed, 213 assertions** (Unit 62 · Architecture 4 · Isolation 69 · Feature 8)                                                                                                         |
+| PHPStan         | **level 6, no errors**                                                                                                                                                                       |
+| Pint            | **pass**                                                                                                                                                                                     |
+| `tsc --noEmit`  | **pass** (strict + `exactOptionalPropertyTypes`)                                                                                                                                             |
+| `npm run build` | **pass**, 621 modules                                                                                                                                                                        |
+| Schema          | 22 tables, `company_id NOT NULL` on all 9 scoped tables, 4 composite `(company_id, id)` FKs, CHECK constraints on both enums — verified from `information_schema`, not from migration output |
 
 ### Anti-tautology proof
 
 The gate requires that guards *fail* on a violation, not merely pass when clean. Three
 violations were planted and reverted:
 
-| Planted | Caught by | Clean after revert |
-|---|---|---|
-| `company_id` added to `Branch::$fillable` | isolation suite | ✔ |
-| `BelongsToCompany` removed from `Department` | schema guard | ✔ |
-| `withoutGlobalScope` added to `RoleProvisioner` | CI grep **and** architecture test | ✔ |
+| Planted                                         | Caught by                         | Clean after revert |
+| ----------------------------------------------- | --------------------------------- | ------------------ |
+| `company_id` added to `Branch::$fillable`       | isolation suite                   | ✔                  |
+| `BelongsToCompany` removed from `Department`    | schema guard                      | ✔                  |
+| `withoutGlobalScope` added to `RoleProvisioner` | CI grep **and** architecture test | ✔                  |
 
 The first planting exposed a **real defect in the guard itself**:
 `expect($x)->not->toContain('company_id', 'message')` passes unconditionally, because Pest
@@ -1601,20 +1601,20 @@ failures layer.
 
 ### Decisions taken during P0
 
-| # | Decision | Reason |
-|---|---|---|
-| P0-1 | `roles.company_id` is **NOT NULL** and `Role` uses `BelongsToCompany` | The trait guard found the column present while spatie scoped it invisibly to our suite. Every role belongs to a company; global roles are not used |
-| P0-2 | `config/` is excluded from the strict-types and zero-comment guards | Those files are published from vendor and regenerated by `vendor:publish`. A guard that fights `vendor:publish` gets disabled. `app/`, `database/`, `routes/` remain covered |
-| P0-3 | `HasFactory` removed from models without a factory | PHPStan level 6 requires the generic annotation; an unused trait is not worth annotating |
-| P0-4 | Permissions **are** shared to the frontend as `auth.can` | Fixes the SMEOS always-render-then-403 UX. Backend authorization remains the only boundary |
+| #    | Decision                                                              | Reason                                                                                                                                                                       |
+| ---- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0-1 | `roles.company_id` is **NOT NULL** and `Role` uses `BelongsToCompany` | The trait guard found the column present while spatie scoped it invisibly to our suite. Every role belongs to a company; global roles are not used                           |
+| P0-2 | `config/` is excluded from the strict-types and zero-comment guards   | Those files are published from vendor and regenerated by `vendor:publish`. A guard that fights `vendor:publish` gets disabled. `app/`, `database/`, `routes/` remain covered |
+| P0-3 | `HasFactory` removed from models without a factory                    | PHPStan level 6 requires the generic annotation; an unused trait is not worth annotating                                                                                     |
+| P0-4 | Permissions **are** shared to the frontend as `auth.can`              | Fixes the SMEOS always-render-then-403 UX. Backend authorization remains the only boundary                                                                                   |
 
 ### Known issues carried out of P0
 
-| ID | Issue |
-|---|---|
+| ID           | Issue                                                                                                                                                                                                                                                                                                                |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **INC-0001** | `coresentinel verify` reports a **false FAIL** on any Pest project: `coresentinel_evidence.py:169` probes only `vendor/bin/phpunit`, and Pest's phpunit shim always exits 1. Fix is to probe `vendor/bin/pest` first. Until then the `verify` tests line is not trustworthy here — read `./vendor/bin/pest` directly |
-| **EVO-004** | CoreSentinel Standing Rule 7 (Windows/PowerShell) is still `PENDING_REVIEW` |
-| P0-5 | No auth UI yet. `/dashboard` returns 401 for guests rather than redirecting, because no `login` route exists. Auth scaffolding is P1 |
+| **EVO-004**  | CoreSentinel Standing Rule 7 (Windows/PowerShell) is still `PENDING_REVIEW`                                                                                                                                                                                                                                          |
+| P0-5         | No auth UI yet. `/dashboard` returns 401 for guests rather than redirecting, because no `login` route exists. Auth scaffolding is P1                                                                                                                                                                                 |
 
 ### Not built in P0 (deliberately)
 
@@ -1629,26 +1629,26 @@ additional isolation assertions that go with it (§39, items 11–16).
 
 ### What shipped
 
-| Component | Detail |
-|---|---|
-| `ScopeResolver` | Resolves the widest `DataScope` across a user's roles for a permission, then constrains the query. **Fails closed** on: no permission, no scope row, owner-less model asked for `own`/`team`, branch-scoped user with no branch |
-| `Scopeable` contract | `ownerColumn(): ?string` + `branchColumn(): ?string`. Nullable by design — `Branch` has no owner, and asking for `own` on it must refuse rather than guess |
-| `AppliesDataScope` | `Model::query()->visibleTo($user, 'permission')` |
-| `BasePolicy` | Record-level checks call **the same resolver** as list queries, so route access and list access cannot diverge |
-| `AuditLog` | Company-scoped, `Scopeable` on `actor_user_id` / `branch_id`, append-only at model **and** database trigger |
-| `AuditPurger` | The single PDPA erasure path — `SET LOCAL app.audit_purge = 'on'` inside a transaction, requires a stated reason, logged at `warning` |
-| Auth | Login/logout, throttled, guest redirect, login recorded to the audit trail |
-| Admin | Branch CRUD (scoped + audited), Audit log viewer (scoped), Bootstrap/React pages |
+| Component            | Detail                                                                                                                                                                                                                          |
+| -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ScopeResolver`      | Resolves the widest `DataScope` across a user's roles for a permission, then constrains the query. **Fails closed** on: no permission, no scope row, owner-less model asked for `own`/`team`, branch-scoped user with no branch |
+| `Scopeable` contract | `ownerColumn(): ?string` + `branchColumn(): ?string`. Nullable by design — `Branch` has no owner, and asking for `own` on it must refuse rather than guess                                                                      |
+| `AppliesDataScope`   | `Model::query()->visibleTo($user, 'permission')`                                                                                                                                                                                |
+| `BasePolicy`         | Record-level checks call **the same resolver** as list queries, so route access and list access cannot diverge                                                                                                                  |
+| `AuditLog`           | Company-scoped, `Scopeable` on `actor_user_id` / `branch_id`, append-only at model **and** database trigger                                                                                                                     |
+| `AuditPurger`        | The single PDPA erasure path — `SET LOCAL app.audit_purge = 'on'` inside a transaction, requires a stated reason, logged at `warning`                                                                                           |
+| Auth                 | Login/logout, throttled, guest redirect, login recorded to the audit trail                                                                                                                                                      |
+| Admin                | Branch CRUD (scoped + audited), Audit log viewer (scoped), Bootstrap/React pages                                                                                                                                                |
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **177 passed, 295 assertions** |
-| PHPStan | level 6, no errors |
-| Pint | pass |
-| `tsc --noEmit` | pass |
-| `npm run build` | pass |
+| Gate            | Result                         |
+| --------------- | ------------------------------ |
+| Pest            | **177 passed, 295 assertions** |
+| PHPStan         | level 6, no errors             |
+| Pint            | pass                           |
+| `tsc --noEmit`  | pass                           |
+| `npm run build` | pass                           |
 
 ### Data scope proven at two layers
 
@@ -1658,11 +1658,11 @@ additional isolation assertions that go with it (§39, items 11–16).
 
 ### Anti-tautology proof
 
-| Planted | Caught by |
-|---|---|
-| `DataScope::Own` stops filtering | "shows a salesperson only their own records" |
-| Fail-open instead of `whereRaw('1 = 0')` when no scope resolves | both fail-closed tests |
-| `priority([...])` replacing the default middleware list | middleware-ordering test |
+| Planted                                                         | Caught by                                    |
+| --------------------------------------------------------------- | -------------------------------------------- |
+| `DataScope::Own` stops filtering                                | "shows a salesperson only their own records" |
+| Fail-open instead of `whereRaw('1 = 0')` when no scope resolves | both fail-closed tests                       |
+| `priority([...])` replacing the default middleware list         | middleware-ordering test                     |
 
 All three reverted clean.
 
@@ -1674,13 +1674,13 @@ All three reverted clean.
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P1-1 | Department and User admin screens are **not** built. Branch CRUD and the audit viewer are; `CompanyUser` is `Scopeable` and policy-covered but has no UI yet |
-| P1-2 | Role/permission editing UI is not built. Roles are seeded by `RoleProvisioner`; changing a scope is currently a data operation |
-| P1-3 | `attribution` / export scoping (§39 item 14) is asserted for list and aggregate, but there is no export endpoint yet to test against |
-| INC-0001 | `coresentinel verify` still reports a false FAIL on Pest projects |
-| EVO-004 | Standing Rule 7 still `PENDING_REVIEW` |
+| ID       | Item                                                                                                                                                         |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P1-1     | Department and User admin screens are **not** built. Branch CRUD and the audit viewer are; `CompanyUser` is `Scopeable` and policy-covered but has no UI yet |
+| P1-2     | Role/permission editing UI is not built. Roles are seeded by `RoleProvisioner`; changing a scope is currently a data operation                               |
+| P1-3     | `attribution` / export scoping (§39 item 14) is asserted for list and aggregate, but there is no export endpoint yet to test against                         |
+| INC-0001 | `coresentinel verify` still reports a false FAIL on Pest projects                                                                                            |
+| EVO-004  | Standing Rule 7 still `PENDING_REVIEW`                                                                                                                       |
 
 ---
 
@@ -1694,11 +1694,11 @@ Added in P2: `customer_groups`, `customers`, `customer_contacts`, `customer_addr
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **436 passed, 636 assertions** (Unit 63 · Architecture 5 · Isolation 334 · Feature 30 · Concurrency 4) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` | pass |
+| Gate         | Result                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| Pest         | **436 passed, 636 assertions** (Unit 63 · Architecture 5 · Isolation 334 · Feature 30 · Concurrency 4) |
+| PHPStan      | level 6, no errors                                                                                     |
+| Pint / `tsc` | pass                                                                                                   |
 
 ### Price resolution returns a decomposition
 
@@ -1729,20 +1729,20 @@ The test spawns **8 real OS processes** via `proc_open`, each allocating 10 numb
 
 ### Three defects found
 
-| # | Defect |
-|---|---|
-| P2-1 | **A database DEFAULT does not populate an in-memory model.** `Customer::create()` left `currency` null despite the column defaulting to `MYR`, and the resolver threw. Fixed by mirroring meaningful DB defaults into `protected $attributes` on 14 models |
-| P2-2 | **`UnitOfMeasure` mapped to `unit_of_measures`; the table is `units_of_measure`.** Nothing failed until first use. A permanent guard now asserts every model maps to a table that exists |
+| #    | Defect                                                                                                                                                                                                                                                                              |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P2-1 | **A database DEFAULT does not populate an in-memory model.** `Customer::create()` left `currency` null despite the column defaulting to `MYR`, and the resolver threw. Fixed by mirroring meaningful DB defaults into `protected $attributes` on 14 models                          |
+| P2-2 | **`UnitOfMeasure` mapped to `unit_of_measures`; the table is `units_of_measure`.** Nothing failed until first use. A permanent guard now asserts every model maps to a table that exists                                                                                            |
 | P2-3 | **Larastan types `decimal:N` as float.** Probed at runtime: it returns a **string**. Money was never at risk, but explicit `(string)` casts were added at the boundary plus a unit test asserting the cast type, so a future change to float fails loudly instead of drifting money |
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P2-4 | **No UI for any P2 entity.** Customers, suppliers and products have models, schema, scoping and pricing but no controllers or screens. The `PriceResolver` is service-only |
+| ID   | Item                                                                                                                                                                                                                                   |
+| ---- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P2-4 | **No UI for any P2 entity.** Customers, suppliers and products have models, schema, scoping and pricing but no controllers or screens. The `PriceResolver` is service-only                                                             |
 | P2-5 | `Customer` is the only P2 model that is `Scopeable`. Products and suppliers are company-scoped but carry no owner, so `own`/`team` on them currently fails closed — correct, but it means product visibility is company-wide by design |
-| P2-6 | Channel pricing is a `price_lists.type` value with no resolver step, because channels do not exist until P5. The step slots in without a migration |
-| P2-7 | Product attributes, serial/batch/expiry and discount rules remain deferred per §10 |
+| P2-6 | Channel pricing is a `price_lists.type` value with no resolver step, because channels do not exist until P5. The step slots in without a migration                                                                                     |
+| P2-7 | Product attributes, serial/batch/expiry and discount rules remain deferred per §10                                                                                                                                                     |
 
 ---
 
@@ -1750,20 +1750,20 @@ The test spawns **8 real OS processes** via `proc_open`, each allocating 10 numb
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **499 passed, 730 assertions** (Unit 63 · Architecture 8 · Isolation 378 · Feature 43 · Concurrency 7) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` | pass |
-| Schema | 48 tables; `orders`, `order_items`, `order_events`, `payments` added |
+| Gate         | Result                                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------------------------ |
+| Pest         | **499 passed, 730 assertions** (Unit 63 · Architecture 8 · Isolation 378 · Feature 43 · Concurrency 7) |
+| PHPStan      | level 6, no errors                                                                                     |
+| Pint / `tsc` | pass                                                                                                   |
+| Schema       | 48 tables; `orders`, `order_items`, `order_events`, `payments` added                                   |
 
 ### Three independent status axes
 
-| Axis | States |
-|---|---|
-| `payment_status` | `unpaid → partially_paid → paid → refunded` |
+| Axis                | States                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `payment_status`    | `unpaid → partially_paid → paid → refunded`                                                                               |
 | `fulfilment_status` | `draft → pending → approved → allocated → picked → packed → shipped → delivered → completed` (reversible before despatch) |
-| `exception_status` | `none → on_hold / cancelled / returned` |
+| `exception_status`  | `none → on_hold / cancelled / returned`                                                                                   |
 
 Both situations §7 predicted are expressible without a hybrid state, and both are tested:
 a **COD order packed while still unpaid**, and an order **shipped and then refunded**.
@@ -1814,14 +1814,14 @@ is why Q-18 (is the client's landed cost real?) is now the highest-value open qu
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P3-1 | **No order UI.** Service, state machine, policy and events exist; no controllers or screens |
-| P3-2 | **Quotation → SO → DO → Invoice** chain is not built. Orders and payments are; quotations, delivery orders, invoices and credit notes are not |
+| ID   | Item                                                                                                                                            |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| P3-1 | **No order UI.** Service, state machine, policy and events exist; no controllers or screens                                                     |
+| P3-2 | **Quotation → SO → DO → Invoice** chain is not built. Orders and payments are; quotations, delivery orders, invoices and credit notes are not   |
 | P3-3 | `quantity_allocated/picked/shipped/returned` columns exist on lines but nothing writes them yet — partial fulfilment lands with Inventory in P4 |
-| P3-4 | Stock is not reserved on allocation. The fulfilment axis moves freely through `allocated`; the reservation hook belongs to P4 |
-| P3-5 | Tax is captured per line but always `0` — the `TaxRate` on a product is not yet applied by `OrderService` |
-| P3-6 | `payments` has no allocation table; one payment belongs to one order. Multi-order settlement is a P7 concern |
+| P3-4 | Stock is not reserved on allocation. The fulfilment axis moves freely through `allocated`; the reservation hook belongs to P4                   |
+| P3-5 | Tax is captured per line but always `0` — the `TaxRate` on a product is not yet applied by `OrderService`                                       |
+| P3-6 | `payments` has no allocation table; one payment belongs to one order. Multi-order settlement is a P7 concern                                    |
 
 ---
 
@@ -1829,12 +1829,12 @@ is why Q-18 (is the client's landed cost real?) is now the highest-value open qu
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **777 passed, 1,098 assertions** (Unit 63 · Architecture 9 · Isolation 609 · Feature 86 · Concurrency 10) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` | pass |
-| Schema | **69 tables**, zero nullable `company_id` |
+| Gate         | Result                                                                                                    |
+| ------------ | --------------------------------------------------------------------------------------------------------- |
+| Pest         | **777 passed, 1,098 assertions** (Unit 63 · Architecture 9 · Isolation 609 · Feature 86 · Concurrency 10) |
+| PHPStan      | level 6, no errors                                                                                        |
+| Pint / `tsc` | pass                                                                                                      |
+| Schema       | **69 tables**, zero nullable `company_id`                                                                 |
 
 ### The three gate criteria
 
@@ -1855,10 +1855,10 @@ both caught, **all discrepancies are reported rather than stopping at the first*
 
 ### Both OMS inventory defects avoided
 
-| OMS defect | What we did |
-|---|---|
+| OMS defect                                                                                           | What we did                                                                                                                                                        |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **H-02** — `commit()`/`release()` did not take their own lock, so a reservation was discharged twice | Both take `lockForUpdate()` on the reservation **and** the stock line; a second `commit()` returns `null` and a second `release()` returns `false`, proven by test |
-| **H-03** — lock-ordering cycle between commit-on-ship and order-cancel | Reservations are always iterated `orderBy('id')`, giving a single deterministic lock order |
+| **H-03** — lock-ordering cycle between commit-on-ship and order-cancel                               | Reservations are always iterated `orderBy('id')`, giving a single deterministic lock order                                                                         |
 
 ### P3 gaps closed
 
@@ -1886,14 +1886,14 @@ count. Planting the duplicate fails both that guard and the behavioural test.
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P4-1 | **No UI for inventory or purchasing.** Services, state and invariants exist; no controllers or screens |
-| P4-2 | `stock_transfers` and `stock_adjustments` have schema and models but **no service** — transferring and adjusting is not yet possible through code |
-| P4-3 | The approval engine is not yet **wired to** purchase orders or stock adjustments; it is a working engine with no callers in the domain flows |
+| ID     | Item                                                                                                                                                                                                                               |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P4-1   | **No UI for inventory or purchasing.** Services, state and invariants exist; no controllers or screens                                                                                                                             |
+| P4-2   | `stock_transfers` and `stock_adjustments` have schema and models but **no service** — transferring and adjusting is not yet possible through code                                                                                  |
+| P4-3   | The approval engine is not yet **wired to** purchase orders or stock adjustments; it is a working engine with no callers in the domain flows                                                                                       |
 | P4-4 ✔ | ~~No landed-cost allocation~~ **CLOSED** — see Appendix M. Original: no landed-cost allocation. `unit_cost` on a GRN line is the PO cost; freight and duty are not apportioned — **this is the accuracy gap behind R-14 and Q-18** |
-| P4-5 | Purchase returns and supplier payment settlement are schema-only |
-| P4-6 | Reservation expiry is swept by `sweepExpired()` but **nothing schedules it** yet |
+| P4-5   | Purchase returns and supplier payment settlement are schema-only                                                                                                                                                                   |
+| P4-6   | Reservation expiry is swept by `sweepExpired()` but **nothing schedules it** yet                                                                                                                                                   |
 
 ---
 
@@ -1901,31 +1901,31 @@ count. Planting the duplicate fails both that guard and the behavioural test.
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **972 passed, 1,366 assertions** (Unit 63 · Architecture 10 · Isolation 785 · Feature 104 · Concurrency 10) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` | pass |
-| Schema | **85 tables**, zero nullable `company_id` |
+| Gate         | Result                                                                                                      |
+| ------------ | ----------------------------------------------------------------------------------------------------------- |
+| Pest         | **972 passed, 1,366 assertions** (Unit 63 · Architecture 10 · Isolation 785 · Feature 104 · Concurrency 10) |
+| PHPStan      | level 6, no errors                                                                                          |
+| Pint / `tsc` | pass                                                                                                        |
+| Schema       | **85 tables**, zero nullable `company_id`                                                                   |
 
 ### The gate: all twelve questions answered by a named tested query
 
 Each method is named after the question it answers, so the code and §14.3 cannot drift:
 
-| # | Method | Result in the test scenario |
-|---|---|---|
-| 1 | `whereDidThisCustomerComeFrom()` | Facebook / Raya 2026 |
-| 2 | `whereDidThisOrderComeFrom()` | Facebook / Raya 2026 / lead LD-0001 |
-| 3 | `whoGeneratedTheLead()` | Ali (MK-ALI) |
-| 4 | `whoClosedTheOrder()` | Siti, North Team |
-| 5 | `whichCampaignGeneratedRevenue()` | RAYA2026 — MYR 1,000 across 1 order |
-| 6 | `whichMarketerGeneratedRevenue()` | Ali — MYR 1,000 |
-| 7 | `whichSalespersonGeneratedRevenue()` | Siti — MYR 1,000 |
-| 8 | `whichChannelConvertsBest()` | FB: 1 lead, 1 order, MYR 1,000 · WALKIN: 0 |
-| 9 | `whatDidThisCampaignCostVersusReturn()` | spend 500, revenue 1,000, net 500, **ROAS 2.0** |
-| 10 | `whatIsTheCostPerLeadByCampaign()` | 1 lead, spend 500, **CPL 500** |
-| 11 | `whichTeamHitTarget()` | North: target 800, achieved 1,000, **125%, hit** |
-| 12 | `whichBranchGeneratedWhat()` | HQ — MYR 1,000 |
+| #   | Method                                  | Result in the test scenario                      |
+| --- | --------------------------------------- | ------------------------------------------------ |
+| 1   | `whereDidThisCustomerComeFrom()`        | Facebook / Raya 2026                             |
+| 2   | `whereDidThisOrderComeFrom()`           | Facebook / Raya 2026 / lead LD-0001              |
+| 3   | `whoGeneratedTheLead()`                 | Ali (MK-ALI)                                     |
+| 4   | `whoClosedTheOrder()`                   | Siti, North Team                                 |
+| 5   | `whichCampaignGeneratedRevenue()`       | RAYA2026 — MYR 1,000 across 1 order              |
+| 6   | `whichMarketerGeneratedRevenue()`       | Ali — MYR 1,000                                  |
+| 7   | `whichSalespersonGeneratedRevenue()`    | Siti — MYR 1,000                                 |
+| 8   | `whichChannelConvertsBest()`            | FB: 1 lead, 1 order, MYR 1,000 · WALKIN: 0       |
+| 9   | `whatDidThisCampaignCostVersusReturn()` | spend 500, revenue 1,000, net 500, **ROAS 2.0**  |
+| 10  | `whatIsTheCostPerLeadByCampaign()`      | 1 lead, spend 500, **CPL 500**                   |
+| 11  | `whichTeamHitTarget()`                  | North: target 800, achieved 1,000, **125%, hit** |
+| 12  | `whichBranchGeneratedWhat()`            | HQ — MYR 1,000                                   |
 
 ### ADR-008 behaviour, tested
 
@@ -1965,14 +1965,14 @@ unique violation for the first-insert race.
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P5-1 | **No UI for any P5 entity.** Leads, campaigns, marketers, sales teams and the twelve reports are all service-layer only |
+| ID   | Item                                                                                                                                           |
+| ---- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| P5-1 | **No UI for any P5 entity.** Leads, campaigns, marketers, sales teams and the twelve reports are all service-layer only                        |
 | P5-2 | Referral and promo codes have schema and models but **no capture path** — nothing resolves a code at order entry into an attribution touch yet |
-| P5-3 | Sales activities, customer visits, follow-ups and the pipeline are schema-only; no service, no kanban |
-| P5-4 | `whichTeamHitTarget()` measures revenue only. Other target metrics are a column value with no calculator |
-| P5-5 | Campaign spend is captured per `(campaign, period)` and is **ready for P6's ad-spend allocation**, but nothing allocates it to orders yet |
-| P5-6 | Attribution touches are recorded by explicit service calls; there is no web capture (UTM landing, click id) |
+| P5-3 | Sales activities, customer visits, follow-ups and the pipeline are schema-only; no service, no kanban                                          |
+| P5-4 | `whichTeamHitTarget()` measures revenue only. Other target metrics are a column value with no calculator                                       |
+| P5-5 | Campaign spend is captured per `(campaign, period)` and is **ready for P6's ad-spend allocation**, but nothing allocates it to orders yet      |
+| P5-6 | Attribution touches are recorded by explicit service calls; there is no web capture (UTM landing, click id)                                    |
 
 ---
 
@@ -1980,12 +1980,12 @@ unique violation for the first-insert race.
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **1,094 passed, 1,544 assertions** (Unit 63 · Architecture 10 · Isolation 884 · Feature 127 · Concurrency 10) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` | pass |
-| Schema | **94 tables** |
+| Gate         | Result                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| Pest         | **1,094 passed, 1,544 assertions** (Unit 63 · Architecture 10 · Isolation 884 · Feature 127 · Concurrency 10) |
+| PHPStan      | level 6, no errors                                                                                            |
+| Pint / `tsc` | pass                                                                                                          |
+| Schema       | **94 tables**                                                                                                 |
 
 ### The four gate criteria
 
@@ -2001,18 +2001,18 @@ unique violation for the first-insert race.
 
 ### All ten prior-art anti-patterns addressed
 
-| # | Anti-pattern (from §13.1) | How P6 answers it |
-|---|---|---|
-| CA-1 | Mutable rate, no effective dating | `commission_rule_versions` are immutable (DB trigger) and effective-dated; a rate change creates v2 and existing commissions keep v1 — tested |
-| CA-2 | Commission cannot name its rule | `rule_version_id`, `basis_amount`, `rate_type`, `rate_applied`, `calc_inputs` all persisted |
-| CA-3 | Aggregate rows with `order_id = NULL` | `commission_sources` links every commission to its contributing orders |
-| CA-4 | Inline in a retrying callback, no index | Accrual is a service call guarded by a `NULLS NOT DISTINCT` unique constraint |
-| CA-5 | Payout sweep never flips to paid | `paid` requires a payout; the state machine refuses otherwise |
-| CA-6 | No reversal path | First-class contra entries |
-| CA-7 | Hard delete to "correct" | `DELETE` refused by trigger |
-| CA-8 | Free-transition status setter | State machine with `reasonAgainst()` |
-| CA-9 | Config the engine never reads | The strategy CHECK lists only the four implemented strategies |
-| CA-10 | Payout not posted to the ledger | **Not yet closed — see below** |
+| #     | Anti-pattern (from §13.1)               | How P6 answers it                                                                                                                             |
+| ----- | --------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| CA-1  | Mutable rate, no effective dating       | `commission_rule_versions` are immutable (DB trigger) and effective-dated; a rate change creates v2 and existing commissions keep v1 — tested |
+| CA-2  | Commission cannot name its rule         | `rule_version_id`, `basis_amount`, `rate_type`, `rate_applied`, `calc_inputs` all persisted                                                   |
+| CA-3  | Aggregate rows with `order_id = NULL`   | `commission_sources` links every commission to its contributing orders                                                                        |
+| CA-4  | Inline in a retrying callback, no index | Accrual is a service call guarded by a `NULLS NOT DISTINCT` unique constraint                                                                 |
+| CA-5  | Payout sweep never flips to paid        | `paid` requires a payout; the state machine refuses otherwise                                                                                 |
+| CA-6  | No reversal path                        | First-class contra entries                                                                                                                    |
+| CA-7  | Hard delete to "correct"                | `DELETE` refused by trigger                                                                                                                   |
+| CA-8  | Free-transition status setter           | State machine with `reasonAgainst()`                                                                                                          |
+| CA-9  | Config the engine never reads           | The strategy CHECK lists only the four implemented strategies                                                                                 |
+| CA-10 | Payout not posted to the ledger         | **Not yet closed — see below**                                                                                                                |
 
 ### A real PostgreSQL trap found
 
@@ -2032,15 +2032,15 @@ The two-stage life works as designed: accrual is **provisional** while `costs_re
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P6-1 | **CA-10 is not closed.** `commission_payouts` exists but payout does not post to a ledger, because Finance is P7. The hook belongs in `CommissionPayoutService`, which is not built |
+| ID   | Item                                                                                                                                                                                  |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P6-1 | **CA-10 is not closed.** `commission_payouts` exists but payout does not post to a ledger, because Finance is P7. The hook belongs in `CommissionPayoutService`, which is not built   |
 | P6-2 | **No payout run.** Payout, payout items and payout requests have schema and models; nothing sweeps approved commissions into a payout, snapshots bank details, or generates a voucher |
-| P6-3 | Accrual is a synchronous service call. §13.3 specifies a **queued job keyed on the order**; the unique constraint already makes that safe, but the job is not written |
-| P6-4 | Nothing triggers accrual automatically. An order reaching a qualifying state should enqueue it; today `accrueForOrder()` must be called explicitly |
-| P6-5 | No reversal is triggered by an order being refunded or returned — the mechanism exists, the event wiring does not |
-| P6-6 | Only four of the eight strategies are implemented; tier ladders, target achievement and upline override are deliberately absent from the CHECK rather than half-built |
-| P6-7 | No UI |
+| P6-3 | Accrual is a synchronous service call. §13.3 specifies a **queued job keyed on the order**; the unique constraint already makes that safe, but the job is not written                 |
+| P6-4 | Nothing triggers accrual automatically. An order reaching a qualifying state should enqueue it; today `accrueForOrder()` must be called explicitly                                    |
+| P6-5 | No reversal is triggered by an order being refunded or returned — the mechanism exists, the event wiring does not                                                                     |
+| P6-6 | Only four of the eight strategies are implemented; tier ladders, target achievement and upline override are deliberately absent from the CHECK rather than half-built                 |
+| P6-7 | No UI                                                                                                                                                                                 |
 
 ---
 
@@ -2048,12 +2048,12 @@ The two-stage life works as designed: accrual is **provisional** while `costs_re
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **1,212 passed, 1,717 assertions** (Unit 63 · Architecture 10 · Isolation 983 · Feature 146 · Concurrency 10) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` | pass |
-| Schema | **103 tables** |
+| Gate         | Result                                                                                                        |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| Pest         | **1,212 passed, 1,717 assertions** (Unit 63 · Architecture 10 · Isolation 983 · Feature 146 · Concurrency 10) |
+| PHPStan      | level 6, no errors                                                                                            |
+| Pint / `tsc` | pass                                                                                                          |
+| Schema       | **103 tables**                                                                                                |
 
 ### The two gate criteria
 
@@ -2075,10 +2075,10 @@ Not a cash-book with a ledger-shaped name:
 
 The last of the ten prior-art anti-patterns. Commission flows through the ledger properly in two steps:
 
-| Event | Entry |
-|---|---|
+| Event                      | Entry                                         |
+| -------------------------- | --------------------------------------------- |
 | Commission becomes payable | Dr Commission Expense / Cr Commission Payable |
-| Payout is paid | Dr Commission Payable / Cr Bank |
+| Payout is paid             | Dr Commission Payable / Cr Bank               |
 
 The payable account clears to zero, a `cash_flows` row is written against the same journal entry, and **the payout flips every commission to `paid`** — the exact defect (CA-5) that let AgentStockit pay the same commission twice. Both were proven by planted violation: removing the status flip fails the sweep test, and removing the ledger post fails the payable-clears test.
 
@@ -2088,15 +2088,15 @@ The payable account clears to zero, a `cash_flows` row is written against the sa
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P7-1 | **No UI for anything in Finance.** Invoices, journal, ageing, expenses and payouts are all service-layer |
-| P7-2 | **Credit notes are not built.** Void covers an unpaid invoice; a paid invoice needs a credit note and the message says so, but the mechanism does not exist |
-| P7-3 | Expenses and expense categories have schema, models and a chart-of-accounts link, but **no service** — nothing posts an expense to the ledger or routes it through approvals |
+| ID   | Item                                                                                                                                                                                    |
+| ---- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P7-1 | **No UI for anything in Finance.** Invoices, journal, ageing, expenses and payouts are all service-layer                                                                                |
+| P7-2 | **Credit notes are not built.** Void covers an unpaid invoice; a paid invoice needs a credit note and the message says so, but the mechanism does not exist                             |
+| P7-3 | Expenses and expense categories have schema, models and a chart-of-accounts link, but **no service** — nothing posts an expense to the ledger or routes it through approvals            |
 | P7-4 | AR and AP are **derived** from invoices and supplier bills rather than stored as separate tables. Deliberate, but it means there is no aged-payables report yet — only aged receivables |
-| P7-5 | Supplier bill payment does not post to the ledger; only sales and commission do |
-| P7-6 | Bank reconciliation, opening balances and period close are absent |
-| P7-7 | Q-18 / P4-4 remain open. The ledger is exact, but the **cost figures flowing into it are still unvalidated** |
+| P7-5 | Supplier bill payment does not post to the ledger; only sales and commission do                                                                                                         |
+| P7-6 | Bank reconciliation, opening balances and period close are absent                                                                                                                       |
+| P7-7 | Q-18 / P4-4 remain open. The ledger is exact, but the **cost figures flowing into it are still unvalidated**                                                                            |
 
 ---
 
@@ -2104,12 +2104,12 @@ The payable account clears to zero, a `cash_flows` row is written against the sa
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **1,261 passed, 1,824 assertions** (Unit 65 · Architecture 10 · Isolation 1,016 · Feature 160 · Concurrency 10) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` / `vite build` | pass |
-| Schema | **106 tables** |
+| Gate                        | Result                                                                                                          |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Pest                        | **1,261 passed, 1,824 assertions** (Unit 65 · Architecture 10 · Isolation 1,016 · Feature 160 · Concurrency 10) |
+| PHPStan                     | level 6, no errors                                                                                              |
+| Pint / `tsc` / `vite build` | pass                                                                                                            |
+| Schema                      | **106 tables**                                                                                                  |
 
 ### The two gate criteria
 
@@ -2120,10 +2120,10 @@ Also proven: rebuilding three times does not double-count, and a cancelled order
 
 **2. Every dashboard figure is scope-filtered.** Two salespeople and an owner over the same data:
 
-| Viewer | Revenue seen |
-|---|---|
-| Siti (scope `own`) | MYR 1,000.00 |
-| Rahim (scope `own`) | MYR 500.00 |
+| Viewer                  | Revenue seen |
+| ----------------------- | ------------ |
+| Siti (scope `own`)      | MYR 1,000.00 |
+| Rahim (scope `own`)     | MYR 500.00   |
 | Owner (scope `company`) | MYR 1,500.00 |
 
 A salesperson with no orders gets `0.0000`, not somebody else's numbers. Removing `visibleTo()` from the dashboard query fails the test. Breakdown tables (`top_salespeople`, `top_campaigns`, team/channel/marketer) run through the same scoped query, so a chart cannot leak what a list would not.
@@ -2140,14 +2140,14 @@ Two P0 tests asserted the placeholder dashboard props (`branchCount`, `userCount
 
 ### Carried forward
 
-| ID | Item |
-|---|---|
-| P8-1 | **Rollups are not scheduled.** `rebuildSales()`/`rebuildCommission()` exist and are tested, but nothing runs them — no scheduler entry, no queued job |
+| ID   | Item                                                                                                                                                                     |
+| ---- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| P8-1 | **Rollups are not scheduled.** `rebuildSales()`/`rebuildCommission()` exist and are tested, but nothing runs them — no scheduler entry, no queued job                    |
 | P8-2 | **No exports.** §39 item 14 (exports apply the same scope as list screens) remains only partly proven: list and aggregate are covered, there is still no export endpoint |
-| P8-3 | Commission rollups are built and scoped but **no dashboard reads them by period range** — only current-period totals |
-| P8-4 | Dashboards read only sales and commission rollups. Inventory value, cash position and top products from §20 are not implemented |
-| P8-5 | Only the dashboard has a UI. Customers, products, orders, inventory, purchasing, invoices and commission remain service-layer only |
-| P8-6 | No charts — figures are stat tiles and tables. Deliberate for now (D-07 in the original prior art was a chart-library choice; nothing has been chosen here) |
+| P8-3 | Commission rollups are built and scoped but **no dashboard reads them by period range** — only current-period totals                                                     |
+| P8-4 | Dashboards read only sales and commission rollups. Inventory value, cash position and top products from §20 are not implemented                                          |
+| P8-5 | Only the dashboard has a UI. Customers, products, orders, inventory, purchasing, invoices and commission remain service-layer only                                       |
+| P8-6 | No charts — figures are stat tiles and tables. Deliberate for now (D-07 in the original prior art was a chart-library choice; nothing has been chosen here)              |
 
 ---
 
@@ -2164,20 +2164,20 @@ three real findings fixed. The phase is therefore marked `[~]`, not `[✔]`.
 
 ### Gate results
 
-| Gate | Result |
-|---|---|
-| Pest | **1,283 passed, 1,883 assertions** (Unit 65 · Architecture 10 · Isolation 1,016 · Feature 163 · Concurrency 10 · **Security 19**) |
-| PHPStan | level 6, no errors |
-| Pint / `tsc` / `vite build` | pass |
-| CoreSentinel scanner | clean |
+| Gate                        | Result                                                                                                                            |
+| --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| Pest                        | **1,283 passed, 1,883 assertions** (Unit 65 · Architecture 10 · Isolation 1,016 · Feature 163 · Concurrency 10 · **Security 19**) |
+| PHPStan                     | level 6, no errors                                                                                                                |
+| Pint / `tsc` / `vite build` | pass                                                                                                                              |
+| CoreSentinel scanner        | clean                                                                                                                             |
 
 ### Three security findings, fixed and guarded
 
-| # | Finding | Fix |
-|---|---|---|
+| #       | Finding                                                                                                                                                                                                                                                                                                                         | Fix                                                                                              |
+| ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
 | **S-1** | **The private disk was serving unauthenticated routes.** Laravel 11/12 ships `config/filesystems.php` with `'serve' => true` on the `local` disk, registering `GET /storage/{path}` **and `PUT /storage/{path}` with no middleware at all** — unauthenticated read *and write* against the disk intended for business documents | `'serve' => false`; a test now fails if any route under `storage/` has an empty middleware stack |
-| **S-2** | **The queue dashboard had no explicit gate.** Horizon fell back to its environment default, so access depended on `APP_ENV` rather than on a decision | `Gate::define('viewHorizon', …)` requiring `modules.manage`; asserted by test |
-| **S-3** | The root path answered `POST`, `PUT`, `PATCH` and `DELETE` because `Route::redirect` registers for every verb | Explicit `Route::get`; asserted by test |
+| **S-2** | **The queue dashboard had no explicit gate.** Horizon fell back to its environment default, so access depended on `APP_ENV` rather than on a decision                                                                                                                                                                           | `Gate::define('viewHorizon', …)` requiring `modules.manage`; asserted by test                    |
+| **S-3** | The root path answered `POST`, `PUT`, `PATCH` and `DELETE` because `Route::redirect` registers for every verb                                                                                                                                                                                                                   | Explicit `Route::get`; asserted by test                                                          |
 
 S-1 is the one that mattered. It is invisible in a `route:list` review unless you inspect middleware, and nothing in the default test suite catches it.
 
@@ -2211,12 +2211,12 @@ and `backup.sh` refuses to write a dump under 1 KB so an empty file is never mis
 
 Verified round-trip:
 
-| Check | Original | Restored |
-|---|---|---|
-| Tables | 106 | 106 |
-| Triggers | 11 | 11 |
-| CHECK constraints | 91 | 91 |
-| Foreign keys | 270 | 270 |
+| Check                                                                  | Original     | Restored  |
+| ---------------------------------------------------------------------- | ------------ | --------- |
+| Tables                                                                 | 106          | 106       |
+| Triggers                                                               | 11           | 11        |
+| CHECK constraints                                                      | 91           | 91        |
+| Foreign keys                                                           | 270          | 270       |
 | Row counts (companies/branches/products/customers/permissions/modules) | 1/1/1/1/24/6 | identical |
 
 **Integrity survives the round-trip, proven against real rows rather than empty tables.** Inserting
@@ -2248,14 +2248,20 @@ known-credential account can reach production.
 
 ### What remains before this can go live
 
-| ID | Item |
-|---|---|
-| P9-1 | **External security review** — the gate's first half. Recommended before any real customer data is loaded |
+> **Status as of 2026-08-15: P9 is NOT closed.** Its gate has two halves — *external security review
+> clean* and *restore rehearsed and documented*. The second is done (Appendix N). The first has not
+> happened and cannot be done from inside this project. Everything else below is either closed or a
+> known, listed gap.
+
+
+| ID     | Item                                                                                                                                                                                                             |
+| ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P9-1   | **External security review** — the gate's first half. `SECURITY-REVIEW.md` is the scoping brief for whoever performs it; the closing procedure is section 9 of that document |
 | P9-2 ✔ | ~~Nothing is scheduled~~ **CLOSED** — see Appendix M. Original: nothing is scheduled. Rollups and the reservation sweep have no scheduler entries; dashboards will go stale and expired holds will never release |
-| P9-3 | **No CI run against this suite in a real pipeline** — the workflow exists from P0 but has never executed on a runner |
-| P9-4 ✔ | ~~Backups not off-machine, no scheduled rehearsal~~ **CLOSED** — see Appendix N |
-| P9-5 | **The UI gap.** Nine phases of domain logic sit behind authentication, branch admin, an audit viewer and dashboards. This is not yet a system staff can operate |
-| P9-6 | Q-18 / P4-4 / R-14 — landed cost is still not apportioned, and commission depends on it |
+| P9-3   | **No CI run against this suite in a real pipeline** — the workflow exists from P0 but has never executed on a runner                                                                                             |
+| P9-4 ✔ | ~~Backups not off-machine, no scheduled rehearsal~~ **CLOSED** — see Appendix N                                                                                                                                  |
+| P9-5 ✔ | ~~**The UI gap.** Nine phases of domain logic sit behind authentication, branch admin, an audit viewer and dashboards~~ **CLOSED** — Appendices O, P, Q, R and S. Sales, purchasing, access, commission and marketing all have screens; the residue is listed as P9-5b…P9-5m |
+| P9-6 ✔ | ~~Q-18 / P4-4 / R-14 — landed cost is still not apportioned~~ **CLOSED** — Appendix M implemented it; Appendix P fixed the by-weight path that had never worked. Q-18 (is the client's cost data real?) remains **their** question, not a code one |
 
 ---
 
@@ -2264,11 +2270,11 @@ known-credential account can reach production.
 Three items closed after the P9 gate, chosen because two were cheap blockers and the third was
 the longest-standing correctness risk in the project.
 
-| Gate | Result |
-|---|---|
-| Pest | **1,308 passed, 1,933 assertions** |
-| PHPStan / Pint / `tsc` | pass |
-| Schema | 107 tables |
+| Gate                   | Result                             |
+| ---------------------- | ---------------------------------- |
+| Pest                   | **1,308 passed, 1,933 assertions** |
+| PHPStan / Pint / `tsc` | pass                               |
+| Schema                 | 107 tables                         |
 
 ### P9-2 — scheduled work is now registered ✔
 
@@ -2276,11 +2282,11 @@ the longest-standing correctness risk in the project.
 one in its own `runAs` block, and **continue past a failing company rather than aborting the run** —
 one tenant's bad data must not stop everyone else's dashboards updating.
 
-| Command | Cadence |
-|---|---|
-| `erp:sweep-reservations` | every 5 minutes |
-| `erp:rebuild-rollups` | every 15 minutes |
-| `erp:rebuild-rollups --date=<yesterday>` | daily 02:15 |
+| Command                                  | Cadence          |
+| ---------------------------------------- | ---------------- |
+| `erp:sweep-reservations`                 | every 5 minutes  |
+| `erp:rebuild-rollups`                    | every 15 minutes |
+| `erp:rebuild-rollups --date=<yesterday>` | daily 02:15      |
 
 All three are `withoutOverlapping()` and `onOneServer()`, asserted by test. CI now fails if either
 command disappears from the schedule.
@@ -2311,10 +2317,10 @@ carrying every component, its share, its per-unit effect and an explanation:
 
 The allocation modes are genuinely different, proven by test:
 
-| Pool | Rule | Cheap line (40) | Pricey line (160) |
-|---|---|---|---|
-| MYR 200 freight | `by_value` | → **44.00** | → **176.00** |
-| MYR 200 duty | `by_quantity` | → **50.00** | → **170.00** |
+| Pool            | Rule          | Cheap line (40) | Pricey line (160) |
+| --------------- | ------------- | --------------- | ----------------- |
+| MYR 200 freight | `by_value`    | → **44.00**     | → **176.00**      |
+| MYR 200 duty    | `by_quantity` | → **50.00**     | → **170.00**      |
 
 **`average_cost` is recomputed from the whole receipt history, not maintained incrementally** — so
 re-applying costing is idempotent by construction, with no reversal bookkeeping and no drift.
@@ -2345,10 +2351,10 @@ rehearsal), P9-5 (**the UI gap**), and the 55 remaining carried-forward items.
 
 ## Appendix N — P9-4 closed: backups and a scheduled rehearsal (2026-08-15)
 
-| Gate | Result |
-|---|---|
-| Pest | **1,318 passed, 1,959 assertions** |
-| PHPStan / Pint / `tsc` | pass |
+| Gate                   | Result                             |
+| ---------------------- | ---------------------------------- |
+| Pest                   | **1,318 passed, 1,959 assertions** |
+| PHPStan / Pint / `tsc` | pass                               |
 
 ### What was missing
 
@@ -2357,9 +2363,9 @@ once decays as the schema moves.
 
 ### What exists now
 
-| Command | Cadence | What it does |
-|---|---|---|
-| `erp:backup` | nightly 02:00 | Dump, prune to `BACKUP_KEEP_DAYS`, optionally copy offsite |
+| Command             | Cadence       | What it does                                                        |
+| ------------------- | ------------- | ------------------------------------------------------------------- |
+| `erp:backup`        | nightly 02:00 | Dump, prune to `BACKUP_KEEP_DAYS`, optionally copy offsite          |
 | `erp:verify-backup` | Mondays 03:00 | Restore the newest dump into a scratch database, verify it, drop it |
 
 `erp:verify-backup` compares **table, trigger, CHECK-constraint and foreign-key counts** against the
@@ -2386,11 +2392,11 @@ Exit code 1. That is a genuine detection against a genuinely outdated artefact, 
 
 ### Three defects the exercise found in the backup path itself
 
-| # | Defect | Fix |
-|---|---|---|
-| B-1 | **A failed dump left a truncated file behind** — the P9 version-mismatch failure wrote a 0-byte `.dump` that sat in the directory looking like a backup | The script now removes its own partial file and says so |
-| B-2 | **Two dumps in the same second overwrote each other**, because the filename carried only second resolution | Filenames now carry a random suffix |
-| B-3 | `latest()` was non-deterministic when two files shared an mtime | Ties now break on filename, and the test asserts only what second-resolution mtimes can actually guarantee |
+| #   | Defect                                                                                                                                                  | Fix                                                                                                        |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| B-1 | **A failed dump left a truncated file behind** — the P9 version-mismatch failure wrote a 0-byte `.dump` that sat in the directory looking like a backup | The script now removes its own partial file and says so                                                    |
+| B-2 | **Two dumps in the same second overwrote each other**, because the filename carried only second resolution                                              | Filenames now carry a random suffix                                                                        |
+| B-3 | `latest()` was non-deterministic when two files shared an mtime                                                                                         | Ties now break on filename, and the test asserts only what second-resolution mtimes can actually guarantee |
 
 B-1 is the one that matters: a failed backup that leaves a plausible-looking file is worse than one
 that leaves nothing.
@@ -2409,3 +2415,547 @@ guard is tested; the transport itself must be verified on the client's infrastru
 `README.md` and `DEPLOYMENT.md` carried three claims that this work made false — *"nothing is
 scheduled yet"*, *"landed cost is not apportioned"*, and *"the scheduled jobs are not yet
 registered"*. All three were corrected rather than left to age.
+
+
+---
+
+## Appendix O — P9-5 closed for the operational core: the user interface (2026-08-15)
+
+Nine phases produced a domain engine that could not be operated by anyone who does not write PHP.
+This appendix records what was built, and — more usefully — what the work found.
+
+### Scope delivered
+
+| Area | Screens | Server-side gate |
+|---|---|---|
+| Customers | list · detail · create · edit | `CustomerPolicy` + `visibleTo` |
+| Leads | list · detail · create · edit | `LeadPolicy` + `visibleTo` |
+| Orders | list · detail · create · transitions · payment | `OrderPolicy` + `visibleTo` + `OrderStateMachine` |
+| Invoices | list with ageing · detail · payment · void | `InvoicePolicy` + `visibleTo` |
+| Products | list · detail with stock · create · edit with inline variants | `ProductPolicy` |
+| Inventory | stock lines · movement history · adjustment · open a line | `inventory.view` / `inventory.adjust` |
+| Suppliers | list · detail · create · edit | `SupplierPolicy` |
+| Commission | list with period totals · detail with full explanation · transitions | `CommissionPolicy` |
+
+The permission registry grew from 42 to **62 permissions across 18 groups**, with per-role grants
+for all eleven roles.
+
+### Navigation is a server decision
+
+`NavigationBuilder` emits a module only when **all four** hold: the module is active, it is enabled
+for the company, the user holds its permission, and `app('router')->has($module->route)` resolves.
+The last condition is not defensive padding — it caught a real defect during this work.
+
+### D-1: a route-name mismatch would have hidden Commission from every user, silently
+
+`ModuleSeeder` named the route `commissions.index`. I registered `commission.index`. Every check
+passed: Pint, PHPStan, TypeScript, the build, and all 1,387 tests. The only symptom would have been
+a Commission entry that never appeared in anyone's sidebar — and because the filter exists precisely
+to prevent 404s, it would have swallowed the mistake without a word.
+
+Two architecture tests now close this permanently: every seeded module must name a route that
+resolves, and a permission that exists in the registry. **Both were proven by planting the exact
+mismatch and confirming the failure**, with the message naming the offending module.
+
+The lesson generalises: *a filter that hides broken things hides your own mistakes too.* Any such
+filter needs a test asserting the filtered set is empty.
+
+### D-2: the status-column write guard fired on a read
+
+`GuardsTest` forbids `'payment_status' => …` outside the state machine. The order presenter emitted
+those keys in a **read-only** Inertia payload. The guard cannot distinguish a read from a write.
+
+I renamed the payload keys to `payment` / `fulfilment` / `exception` rather than narrowing the
+guard. Weakening a guard to accommodate new code is how guards die; the cost here was three lines
+of TypeScript.
+
+### D-3: three screen tests were passing for the wrong reason
+
+Caught only by planting violations:
+
+| Test | Why the pass was hollow |
+|---|---|
+| "salesperson cannot see the customer list" | The salesperson role **does** hold `customers.view` by design. Rewritten against `storekeeper`, which does not |
+| "salesperson cannot cancel an order" | Asserted the rendered `permissions.cancel` flag, never the endpoint. Removing the server-side `cancel` mapping left it green. A direct-POST test was added |
+| "branch manager cannot void an invoice" | An invoice has **no owner column**, so an `own` scope was refusing it — not the `invoices.void` permission. Rewritten with a branch-scoped manager who can plainly open the invoice and is still refused the void |
+
+D-3 is the reason this project plants violations rather than trusting green runs. All three tests
+were written by me, reviewed by me, and were worthless until a planted violation exposed them.
+
+### §18 compliance — hidden buttons are not security
+
+The brief was explicit: *"Frontend authorization is for UX. Backend authorization is the actual
+security boundary."*
+
+Every destructive or privileged action is refused server-side even when the button is hidden, and
+each refusal is proven by a test that posts directly to the endpoint. Each of those tests was then
+proven to **fail** when the server-side check is removed:
+
+| Action | Server gate | Planted violation → test failed |
+|---|---|---|
+| Approve an order | `orders.approve`, not `orders.update` | ✔ 403 became 302 |
+| Cancel an order | `orders.cancel`, not `orders.update` | ✔ 403 became 302 |
+| Record an order payment | `payments.create` | ✔ 403 became 302 |
+| List orders / customers / leads / commissions | `visibleTo` on the query | ✔ 1 row became 2 |
+| Adjust stock | `inventory.adjust`, not `inventory.view` | ✔ 403 became 302 |
+| Mark commission paid | `commissions.pay`, not `commissions.approve` | ✔ 403 became 302 |
+| Void an invoice | `invoices.void` | ✔ 403 became 200 |
+| See the supplier list | `suppliers.view` | ✔ 403 became 200 |
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` | passed |
+| `phpstan` (level 6) | no errors |
+| `tsc --noEmit` (strict, `exactOptionalPropertyTypes`) | clean |
+| `npm run build` | built |
+| `pest` | **1,407 passed / 2,351 assertions** (up from 1,318) |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P9-5a ✔ | ~~**No purchasing UI.** PR → PO → GRN → Bill, three-way match and landed cost are service-layer only~~ **CLOSED** — see Appendix P |
+| P9-5b ~ | **No setup UI** for ~~commission plans and rules~~ (Appendix R), ~~campaigns and channels~~ (Appendix S); price lists, territories, marketing teams, referral codes and approval flows are still seeded or configured in `tinker` |
+| P9-5c | **No exports**, on any screen |
+| P9-5d | **No credit-note screen** |
+| P9-5e | The order create screen lists up to 500 variants in a plain `<select>`. Fine for an SME catalogue; it needs a typeahead beyond that |
+| P9-5f | **No screen has been used by a human.** Every claim here rests on tests and a build, not on anyone completing a day's work in the system |
+| P9-5g | No accessibility audit, and no browser testing beyond the Vite build |
+
+
+---
+
+## Appendix P — P9-5a closed: the purchasing interface (2026-08-15)
+
+The full PR → PO → GRN → Bill → Payment chain now has screens, plus an approvals inbox. The
+interesting part of this work was not the screens; it was what building them exposed.
+
+### Scope delivered
+
+| Screen | Actions | Server gate |
+|---|---|---|
+| Purchase requests | list · detail · create · submit · approve/reject | `purchasing.view` / `create` / `approve` + branch scope |
+| Purchase orders | list · detail · create (blank or seeded from an approved request) · submit · approve/reject | `purchasing.*` + branch scope |
+| Receive goods | inline on the order, defaulting to what is still outstanding | `purchasing.receive` |
+| Goods receipts | detail · landed-cost list · add a landed cost | `purchasing.view` / `purchasing.receive` |
+| Supplier bills | list · detail with three-way match · create from an order · approve · pay | `purchasing.*` + `payments.create` |
+| Approvals | inbox of everything pending, each row showing why you cannot decide it | `purchasing.approve` |
+
+Five modules were added to the navigation under a new **Purchasing** group, and Suppliers moved
+there from Catalogue.
+
+### D-4: landed cost apportioned by weight had always been apportioning nothing
+
+`LandedCostAllocator` reads `$item->variant->weight_grams ?? 0`. **`GoodsReceiptItem` had no
+`variant` relation.** In PHP, `$null->weight_grams ?? 0` quietly yields `0`, so every by-weight
+allocation had been dividing by a zero denominator and apportioning **nothing at all** — while
+reporting itself as successful.
+
+Nine phases of tests never caught it, because there was no by-weight test. The fixture set
+`weight_grams` on its variants, which made the gap look covered; both variants carried the *same*
+weight, so even a by-weight assertion on that fixture would have matched the by-quantity result.
+
+It surfaced only because adding the `variant` relation for the receipt screen turned the silent
+`null` into a `LazyLoadingViolationException` — eight tests failed at once. The bug announced
+itself only when I stopped it from being silent.
+
+Fixed by eager-loading `variant` in the allocator. Two tests added:
+
+- **by weight with genuinely different weights** — 400 freight over 1000 g and 3000 g gives 50.00
+  and 190.00, a split that is neither the by-value (48 / 168) nor the by-quantity (60 / 180) answer,
+  so it can only pass if weight is really being read
+- **by weight with no weights recorded** — apportions nothing and says so in the stored basis
+
+Both were proven by removing the relation again and confirming the first test fails.
+
+The lesson, which generalises past this bug: **`?? 0` on a chained property access converts a
+missing relation into a plausible number.** Any fixture whose values are identical across rows
+cannot tell a correct split from a broken one — vary them, or the test proves nothing.
+
+### D-5: a cross-company test that proved company isolation, not data scope
+
+"Never shows a purchase order belonging to another company" passed with `visibleTo()` deleted from
+the query, because the global company scope already refuses the other company's rows. Real
+protection, wrong test — it says nothing about the branch scope.
+
+Replaced with two branch-scoped tests (list and detail), both proven by planting.
+
+This is the same shape as D-3's invoice-void test in Appendix O: **a test passes for the wrong
+reason whenever a second, unrelated guard is also refusing.** Where defence is layered, the test has
+to isolate the layer it names.
+
+### Approvals
+
+`ApprovalEngine` decides; it never touched the thing being approved. A new
+`ApprovalOutcomeApplier` maps a resolved request back onto its subject (`approved` → approved,
+`rejected` → rejected, or `cancelled` for an order, `returned` → back to draft), so the engine stays
+generic and the mapping is in one testable place.
+
+Where no `ApprovalFlow` is configured — the state of a fresh install — submit still moves the record
+to `pending` and a holder of `purchasing.approve` decides directly. **The screen says so in plain
+words** rather than presenting an approval trail that does not exist.
+
+### §18 compliance
+
+Every purchasing action is refused server-side with the button hidden, and each refusal was proven
+by removing the check and confirming the test fails:
+
+| Action | Gate | Planted violation → failed |
+|---|---|---|
+| List purchase requests / orders | `visibleTo` + branch scope | ✔ 1 row became 2 |
+| Open an order outside your branch | `PurchaseOrderPolicy` record scope | ✔ 403 became 200 |
+| Approve a purchase request | `purchasing.approve`, not `purchasing.create` | ✔ 403 became 302 |
+| Receive goods | `purchasing.receive`, not `purchasing.view` | ✔ 403 became 302 |
+| Receive against an unapproved order | status check | ✔ receipt was created |
+| Add a landed cost | `purchasing.receive` | ✔ 403 became 302 |
+| Approve a bill | `ThreeWayMatch` must pass first | ✔ a mismatched bill was approved |
+| Pay a bill | `payments.create` | ✔ 403 became 302 |
+| Pay an unapproved bill | status check | ✔ payment went through |
+| Approvals inbox | `purchasing.approve` | ✔ 403 became 200 |
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` | passed |
+| `phpstan` (level 6) | no errors |
+| `tsc --noEmit` | clean |
+| `npm run build` | built |
+| `pest` | **1,433 passed / 2,535 assertions** (up from 1,407) |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| P9-5h | **No approval-flow setup screen.** Flows, levels and approver roles are seeded or created in `tinker`; without one, approval is a direct decision |
+| P9-5i | No stock-transfer or stock-count screens |
+| P9-5j | No supplier debit notes, and no partial-return path on a receipt |
+| P9-5k | A purchase order's lines cannot be edited after creation — it must be cancelled and re-raised |
+| P9-5l | **The by-weight allocation had never run correctly in this codebase.** Any average cost computed from a by-weight receipt before today was wrong. No production data exists yet, so nothing needs restating — but if this code was ever copied elsewhere, it carries the bug |
+| P9-5m | Still true from Appendix O: no screen has been used by a human |
+
+
+---
+
+## Appendix Q — Access administration (2026-08-15)
+
+Chosen as the next step because a company could hold exactly **one** usable account: the only way to
+add staff was `erp:create-owner`, which makes owners, or `tinker`. Everything else built so far was
+unadoptable behind that.
+
+### Scope delivered
+
+| Screen | Actions |
+|---|---|
+| People | list · add (sign-in account + company membership in one step) · edit role, branch, department, employee number, active |
+| Roles and reach | role × permission matrix, with the **data scope editable per role per permission** |
+| Your profile | change your name, and change your own password |
+
+The profile screen is not decoration: an administrator sets a new person's initial password, so
+without a self-service change that password could never be rotated. Adding user administration
+without it would have been a net loss in security.
+
+### The four rules, all in `AccessAdministrator`
+
+| Rule | Why |
+|---|---|
+| You cannot grant a role carrying a permission you do not hold | otherwise anyone with `users.create` promotes themselves to owner |
+| You cannot change your own access | the same escalation by a shorter route |
+| The last active owner cannot be demoted or deactivated | a company with no active owner can never be administered again |
+| You cannot set a reach wider than your own on that permission, nor edit a role you hold | scope is a privilege like any other |
+
+Which permissions a role carries stays fixed by `PermissionRegistry` in code. **Only reach is
+editable at runtime** — so a deploy cannot be silently undone in the database, while the data-scope
+layer the brief asked for is genuinely tunable.
+
+### D-6: two guards were unreachable, and their tests were proving a different guard
+
+The plant pass caught both:
+
+| Test | What was really refusing |
+|---|---|
+| "refuses to change your own access" | the owner editing themselves to staff also tripped the **last-owner** guard. Removing the self-edit guard changed nothing |
+| "refuses to deactivate the last active owner" | the request carried `role=owner`, which tripped the **escalation** guard first, because an admin does not hold every owner permission |
+
+The second one exposed a real design flaw, not just a weak test: **re-submitting a member's
+existing role was being treated as granting it.** An administrator therefore could not edit an
+owner's branch or employee number at all. Fixed so the escalation check runs only when the role
+actually changes — which is both correct and what makes the last-owner guard reachable.
+
+Tests rewritten to isolate the guard each one names: self-edit now uses an administrator who is not
+an owner; deactivation now keeps the role unchanged so escalation cannot pre-empt it. Two positive
+tests added alongside (an admin editing an owner's details, and deactivating an owner once a second
+active owner exists), so the guards are shown to permit as well as refuse.
+
+This is the third appearance of the same failure mode — after Appendix O's invoice void and
+Appendix P's cross-company purchase order. Stated once more, plainly: **where defence is layered,
+a refusal proves nothing about the guard you meant to test.** Only planting the violation tells you
+which layer answered.
+
+### §18 compliance
+
+| Action | Gate | Planted violation → failed |
+|---|---|---|
+| See the people list | `users.view` | ✔ 403 became 200 |
+| See the role matrix | `roles.view` | ✔ 403 became 200 |
+| Grant a role above your own | permission-subset check | ✔ the escalated account was created |
+| Change your own access | self check | ✔ the self-demotion succeeded |
+| Demote or deactivate the last owner | active-owner count | ✔ both succeeded |
+| Widen a role's reach past your own | `DataScope::covers` | ✔ the widening was written |
+| Edit the reach of your own role | own-role check | ✔ the change was written |
+| Change a password without the current one | `Hash::check` | ✔ the password changed |
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` | passed |
+| `phpstan` (level 6) | no errors |
+| `tsc --noEmit` | clean |
+| `npm run build` | built |
+| `pest` | **1,459 passed / 2,653 assertions** (up from 1,439) |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| Q-1 | **Nothing forces a password change.** An administrator-set password works indefinitely; the profile screen says so, but the system does not insist |
+| Q-2 | No password reset by email, and no mail configuration is assumed anywhere |
+| Q-3 | No two-factor authentication and no session-device list |
+| Q-4 | A person cannot be removed from a company, only deactivated. That is deliberate — history references them — but there is no leaver workflow |
+| Q-5 | Custom roles cannot be created; the eleven in `CompanyRole` are the catalogue |
+| Q-6 | No screen shows *effective* access for one person (role permissions × scope × branch) — the matrix is per role, not per human |
+| Q-7 | Still true from Appendix O: no screen has been used by a human |
+
+
+---
+
+## Appendix R — Commission configuration (2026-08-15)
+
+The commission engine was the headline differentiator and, until today, **could not pay anybody**:
+plans and rules existed only as tables, configurable through `tinker`. Six phases of engine sat
+behind that.
+
+### Scope delivered
+
+| Screen | Actions |
+|---|---|
+| Commission plans | list · create · edit strategy, recipient, ad-spend allocation, active |
+| Plan detail | add rules · **publish a rate as a new version** · stop or resume a rule · full version history |
+
+A new permission, `commissions.configure`, separates *setting the rates* from *seeing and paying
+them*. An accountant keeps `commissions.view/approve/pay` and is deliberately **not** given
+`configure` — approving a payout and deciding what the rate is are different jobs.
+
+### D-7: my design fought the ledger, and the database was right
+
+`publishVersion()` originally closed the outgoing version by writing `valid_to` onto it. The second
+publish failed every time: **a database trigger rejects any update to `commission_rule_versions`**,
+because a published rate is a historical fact.
+
+I could have dropped the trigger. Instead I read what the engine already does — `ruleVersionFor()`
+orders by `valid_from DESC, version DESC` and takes the first — and concluded the design was wrong,
+not the constraint. **Which version is in force is derived, not stored.** Rows are now written once
+and never touched.
+
+That turned out better than the original, not merely legal: a version can be published with a future
+`valid_from` and the screen shows it as *scheduled* while the current rate stays *in force*, which
+the write-back approach could not express. A test pins it.
+
+The lesson: *when an invariant the codebase already enforces blocks a new feature, the feature is
+usually the thing that is wrong.*
+
+### D-8: making scope editable would have let every upgrade silently undo it
+
+`RoleProvisioner::provision()` used `updateOrCreate` on `RolePermissionScope`, resetting each scope
+to the role default. Harmless while scopes were only ever set by that same seeder — **destructive
+the moment Appendix Q made them editable in the UI.**
+
+An administrator narrows `customers.view` to branch; the next deploy re-provisions and silently
+widens it back to company. Nobody would notice until data leaked.
+
+Changed to `firstOrCreate`, so provisioning fills gaps and never overwrites. Added
+`php artisan erp:sync-roles` — needed anyway, since a release that adds a permission does not reach
+existing companies until roles are re-provisioned — with two tests: a tuned scope survives a sync,
+and a newly shipped permission arrives through one. The first was proven by restoring
+`updateOrCreate` and watching it fail.
+
+Both `README.md` and `DEPLOYMENT.md` now carry the upgrade step.
+
+### The claim that matters
+
+Configuration is worth nothing if it does not pay. One test drives the whole path through HTTP:
+create a plan → add a rule → publish a 5% rate → place a 400 order as a salesperson →
+**accrue 20.00 to that salesperson**, and see it on the commission screen. A companion test proves
+an order accrues **nothing** while no plan is configured, so the first test cannot be passing by
+accident.
+
+### §18 compliance
+
+| Action | Gate | Planted violation → failed |
+|---|---|---|
+| See the plans screen | `commissions.configure` | ✔ 403 became 200 |
+| Publish a rate | `commissions.configure` | ✔ 403 became 302 |
+| Backdate a rate over the one in force | start-date check | ✔ the backdated version was written |
+| Percentage above 100 | rate ceiling | ✔ 140% was accepted |
+| Rate of zero or less | positivity check | ✔ 0 was accepted |
+| Fixed rate on a percentage plan | strategy match | ✔ the mismatch was accepted |
+| Change strategy after accrual | accrual lock | ✔ the strategy changed under paid commission |
+| Future-dated rate taking effect early | `valid_from <= now` | ✔ the future rate applied immediately |
+| Tuned scope surviving an upgrade | `firstOrCreate` | ✔ the scope reverted to the role default |
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` | passed |
+| `phpstan` (level 6) | no errors |
+| `tsc --noEmit` | clean |
+| `npm run build` | built |
+| `pest` | **1,478 passed / 2,769 assertions** (up from 1,459) |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| R-1 | **Tiered rates are not editable.** `tier_config` and `conditions` are stored and honoured by the engine, but the screen publishes a flat rate only |
+| R-2 | No screen shows *what a plan would pay* on a sample order before it goes live |
+| R-3 ✔ | ~~The `upline` recipient role can be selected but the engine has no upline resolution~~ **CLOSED** — Appendix S implements it from `company_users.manager_id` |
+| R-4 | Accrual is not triggered from the UI; it runs on the order lifecycle. There is no "recalculate this period" action |
+| R-5 ✔ | ~~Ad-spend allocation is configurable per plan but campaign spend still has no screen~~ **CLOSED** — Appendix S |
+| R-6 | Still true from Appendix O: no screen has been used by a human |
+
+
+---
+
+## Appendix S — Marketing setup and attribution reporting (2026-08-15)
+
+Attribution is the brief's other named differentiator. It was fully built and fully tested — and
+**unusable**, because nothing could create a channel or a campaign. Every order's attribution came
+out with a salesperson and nothing else, and the twelve tested reports in `AttributionReport` had
+never had a screen.
+
+### Scope delivered
+
+| Screen | Actions |
+|---|---|
+| Channels | list · create · turn on/off, with campaign and attribution counts |
+| Campaigns | list · create · edit · **record ad spend** · budget against spend |
+| Marketers | list · link a company member as a marketer · activate/deactivate |
+| Attribution | seven reports over a date window: revenue by campaign, channel, marketer, salesperson and branch; **spend against return**; cost per lead |
+
+A new `marketing` permission group (`view`, `manage`) separates running campaigns from reading them:
+a marketer sees what they run, a marketing manager changes it, a salesperson sees neither.
+
+This closes **R-5** — ad-spend allocation had been configurable per plan since Appendix R with no
+way to enter any spend, which meant a margin plan treated every campaign as free and overpaid.
+
+### R-3 closed: the trap I shipped last session
+
+Appendix R left `upline` selectable as a commission recipient while the engine had no resolution for
+it — a plan could be configured, look correct, and pay nobody, silently. That is worse than an
+error message.
+
+Implemented from `company_users.manager_id`: the upline of an order is the manager of the
+salesperson frozen on its attribution. Two tests — one proving the manager is paid 2% of 500 rather
+than the seller, one proving nothing accrues when the seller has no manager. The first was proven by
+deleting the `'upline'` match arm.
+
+The lesson is about last session, not this one: **offering a choice the engine cannot honour is a
+defect even when nothing crashes.** Either implement it or do not list it.
+
+### The claim that matters
+
+A test drives the whole chain: create a channel → create a campaign → record 400 of ad spend →
+place a 1,000 order → attribute it to that campaign → the report shows **spend 400, revenue 1,000,
+net 600**. A second test shifts the window a year back and asserts the same data reports **nothing**,
+so the first cannot be passing by ignoring its filters — which is exactly what the planted violation
+on the date window confirmed.
+
+### §18 compliance
+
+| Action | Gate | Planted violation → failed |
+|---|---|---|
+| See channels, campaigns, marketers | `marketing.view` | ✔ 403 became 200 |
+| Create a channel | `marketing.manage` | ✔ 403 became 302 |
+| Record ad spend | `marketing.manage` | ✔ 403 became 302 |
+| Make an outsider a marketer | company-membership rule | ✔ the outsider was linked |
+| Link the same person twice | uniqueness rule | ✔ a duplicate marketer was created |
+| Read the attribution report | `reports.view` | ✔ 403 became 200 |
+| Honour the reporting window | date filter | ✔ out-of-window rows appeared |
+
+### Gate evidence
+
+| Check | Result |
+|---|---|
+| `pint --test` | passed |
+| `phpstan` (level 6) | no errors |
+| `tsc --noEmit` | clean |
+| `npm run build` | built |
+| `pest` | **1,495 passed / 2,878 assertions** (up from 1,478) |
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| S-1 | **Attribution cannot be captured from the web.** There is no landing-page or UTM capture endpoint, so `attribution_touches` are only ever written by tests or by hand — the campaign on an order must be set deliberately |
+| S-2 | No referral-code screen, and no marketing-team screen |
+| S-3 | Cost per lead uses whole-life campaign spend against windowed leads. The screen says so; the numbers are not directly comparable |
+| S-4 | No export from the attribution screen, and no chart — tables only |
+| S-5 | Campaign spend has no approval or budget enforcement. Going over budget is reported, never prevented |
+| S-6 | Still true from Appendix O: no screen has been used by a human |
+
+
+---
+
+## Appendix T — Preparing P9-1 for a third party (2026-08-15)
+
+P9-1 cannot be closed from inside this project — an external review is external by definition. What
+*can* be done from inside is remove every reason for the engagement to be slow, vague or expensive.
+`SECURITY-REVIEW.md` is that work: the trust model, the claim under test, what is already asserted
+and where I think the weak points are, ending with an explicit definition of *clean* and the
+procedure for recording the outcome.
+
+The most useful section is **§3, "what I would attack"** — seven specific places, ordered by where I
+believe the risk actually sits, with the reasoning. A reviewer who disagrees with that ordering has
+learned something in ten minutes rather than two days.
+
+### D-9: the Security suite could not run on its own
+
+Found while counting tests per suite for the brief. `pest --testsuite=Security` failed with
+**"Call to undefined function person()"**: the Horizon gate test added in Appendix Q calls a helper
+defined in `tests/Feature/DataScopeRouteTest.php`. A full run loads the Feature file first, so the
+whole suite was green and the defect invisible.
+
+It mattered for two reasons. A CI pipeline that shards by suite would have failed. And the first
+thing a reviewer does is run the Security suite alone — the brief tells them to.
+
+Shared helpers moved to `tests/Helpers.php`, loaded from `tests/Pest.php`. A static architecture
+guard now fails if any suite calls a function defined in another suite's file, proven by moving
+`person()` back and watching it name the offending file.
+
+**Every suite now passes alone:** Unit 106 · Architecture 13 · Isolation 1,027 · Feature 310 ·
+Concurrency 10 · Security 30. Total **1,496 / 2,879 assertions**.
+
+The pattern is the same one this project keeps hitting: *a green full-suite run says nothing about
+the ways the suite might be invoked.* Test the invocation, not only the tests.
+
+### One claim in the brief was overstated, and was corrected
+
+§3.1 originally told the reviewer that a grep for `DB::table(` would show hits that "should carry an
+explicit company filter", implying the architecture guard covers them. It does not: the guard asserts
+that a **file** using `DB::table()` mentions `company_id` somewhere, so a file with two raw queries
+where only one is scoped would pass. The brief now says so plainly and tells the reviewer to check
+call sites rather than files.
+
+That limitation is worth carrying forward on its own account.
+
+### Carried forward
+
+| ID | Item |
+|---|---|
+| T-1 | **The raw-query architecture guard is file-level, not call-site-level.** Two raw queries in one file, one scoped, passes. Tightening it means parsing rather than grepping |
+| T-2 | P9-1 still open — the brief is written, the engagement is not booked |
+| T-3 | P9-3 still open — `.github/workflows/ci.yml` has never executed on a runner, and there is no remote |
