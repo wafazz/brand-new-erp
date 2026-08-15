@@ -1,0 +1,24 @@
+[
+  {
+    "id": "INC-0001",
+    "title": "coresentinel verify reports a false FAIL on every Pest project",
+    "problem": "Brand New ERP P0 has 143 passing Pest tests, but coresentinel verify reported 'Security / Unit Test FAIL 0/25 - test suite exited 1'. Root cause: coresentinel_evidence.py line 169 probes only vendor/bin/phpunit and runs it. Pest ships phpunit as a transitive dependency and its phpunit shim exits 1 with 'Please run ./vendor/bin/pest instead'. The detector therefore selects a runner guaranteed to fail. Fix: probe vendor/bin/pest before vendor/bin/phpunit. A green suite reported as FAIL is worse than UNKNOWN because it trains the reader to ignore verification output",
+    "root_cause": null,
+    "resolution": null,
+    "learning": null,
+    "severity": "Medium",
+    "status": "Open",
+    "root_cause_class": null,
+    "detected_by": null,
+    "occurred_at": "2026-08-15 14:00:22",
+    "resolved_at": null,
+    "project": "Brand New ERP",
+    "related_decisions": [],
+    "related_files": [],
+    "related_commits": [],
+    "related_tests": [],
+    "related_patterns": [],
+    "related_tasks": [],
+    "scope": "project"
+  }
+]
