@@ -84,3 +84,29 @@ it('does not need a built frontend to test the backend', function (): void {
         'been produced - which is every machine except one that has already run npm run build.'
     );
 });
+
+it('points every configured page path at a directory whose name matches on disk exactly', function (): void {
+    $offenders = [];
+
+    foreach ((array) config('inertia.pages.paths', []) as $path) {
+        $parent = dirname((string) $path);
+        $wanted = basename((string) $path);
+        $actual = is_dir($parent) ? scandir($parent) ?: [] : [];
+
+        if (! in_array($wanted, $actual, true)) {
+            $near = array_values(array_filter(
+                $actual,
+                static fn (string $entry): bool => strcasecmp($entry, $wanted) === 0
+            ));
+
+            $offenders[] = $near === []
+                ? "{$path} does not exist"
+                : "{$path} is really named [{$near[0]}]";
+        }
+    }
+
+    expect($offenders)->toBe(
+        [],
+        'A case-insensitive filesystem hides this and a Linux runner does not: '.implode('; ', $offenders)
+    );
+});

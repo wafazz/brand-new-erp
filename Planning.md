@@ -3051,9 +3051,23 @@ build is covered where it belongs.
 Proven by moving `public/build` out of the way entirely and running the full suite: **1,499 passed
 with no compiled frontend present.**
 
+### D-14: a capital letter, invisible on macOS
+
+Fourth run, 26 failures: `Inertia page component file [Dashboard] does not exist.`
+
+Inertia's default page path is `resource_path('js/pages')` — **lowercase**. This project's directory
+is `resources/js/Pages`. macOS is case-insensitive by default, so the finder resolved it here for
+five waves. Linux is case-sensitive, so on a runner the path simply does not exist and every
+`assertInertia` fails.
+
+Fixed by publishing `config/inertia.php` that names the path explicitly, rather than depending on a
+filesystem that quietly ignores case. A guard now reads every configured page path and compares its
+basename against the real directory entry, reporting *"is really named [Pages]"* when they differ
+only in case.
+
 ### The pattern, stated once
 
-Four CI runs, four defects, all the same shape:
+Five CI runs, five defects, all the same shape:
 
 | | The runner lacked… |
 |---|---|
@@ -3061,6 +3075,7 @@ Four CI runs, four defects, all the same shape:
 | D-11 | a PHP version the docs promised but the lock cannot install |
 | D-12 | database schema left behind by previous local runs |
 | D-13 | a `public/build` directory left behind by a previous `npm run build` |
+| D-14 | a filesystem that ignores the difference between `Pages` and `pages` |
 
 None was a logic error. Every one was **an undeclared dependency on the state of one machine**, and
 none was findable there, because the machine supplying the state was the machine running the test.
@@ -3068,6 +3083,10 @@ none was findable there, because the machine supplying the state was the machine
 `Planning.md` has claimed *"N passed"* since P0. Every one of those claims was conditional on
 accumulated local state that was never written down. The suite is now portable, and that is a
 different and stronger property than being green.
+
+The local reproduction is now the real gate: **drop the test database, move `public/build` aside,
+build `.env` from `.env.example`, and run.** Under those conditions the suite passes 1,501 / 2,884.
+Any future claim of a green suite should be made after that, not before.
 
 Two of the three guards written during this work were themselves defective and caught by planting —
 one matched an import rather than an activation, and one used Pest's `toContain($needle, $message)`,
@@ -3078,6 +3097,6 @@ CoreSentinel failures layer during P0, encountered again from the opposite direc
 
 | ID | Item |
 |---|---|
-| U-1 | CI has run three times and failed three times, each finding a real defect. **A green run is still outstanding** — P9-3 does not close until one exists |
+| U-1 | CI has run four times and failed four times, each finding a real defect. **A green run is still outstanding** — P9-3 does not close until one exists |
 | U-2 | PHP 8.3 is no longer supported. Dropping the Symfony 8 packages would restore it, if that ever matters to a deployment target |
 | U-3 | No coverage reporting, no static analysis of the frontend beyond `tsc`, and CI does not run the Concurrency suite's multi-process tests under load |
